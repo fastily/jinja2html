@@ -5,10 +5,8 @@ import os
 from pathlib import Path
 import time
 
-from bs4 import BeautifulSoup
 import livereload
 import jinja2
-
 
 t_env = jinja2.Environment(loader=jinja2.FileSystemLoader("."), autoescape=True)
 
@@ -24,22 +22,22 @@ def build(path, dev=True):
     """
 
     output = t_env.get_template(path).render()
-    if dev:
-        try:
-            soup = BeautifulSoup(output, "lxml")
-            body_tag = soup.find("body")
+    # if dev:
+    #     try:
+    #         soup = BeautifulSoup(output, "lxml")
+    #         body_tag = soup.find("body")
 
-            # add config for liveReload
-            script_tag = soup.new_tag("script")
-            script_tag.string = 'window.LiveReloadOptions = {host: "localhost"}'
-            body_tag.append(script_tag)
+    #         # add config for liveReload
+    #         script_tag = soup.new_tag("script")
+    #         script_tag.string = 'window.LiveReloadOptions = {host: "localhost"}'
+    #         body_tag.append(script_tag)
 
-            # actually add the script
-            body_tag.append(soup.new_tag("script", src="https://cdn.jsdelivr.net/npm/livereload-js@3.2.1/dist/livereload.min.js",
-                                         integrity="sha256-Tm7IcDz9uE2N6RbJ0yeZiLbQRSrtMMMhWEFyG5QD8DI=", crossorigin="anonymous"))
-            output = soup.prettify()
-        except AttributeError:
-            print(f"WARNING: Malformed or non-existent html in '{path}'.  Doing nothing.")
+    #         # actually add the script
+    #         body_tag.append(soup.new_tag("script", src="https://cdn.jsdelivr.net/npm/livereload-js@3.2.1/dist/livereload.min.js",
+    #                                      integrity="sha256-Tm7IcDz9uE2N6RbJ0yeZiLbQRSrtMMMhWEFyG5QD8DI=", crossorigin="anonymous"))
+    #         output = soup.prettify()
+    #     except AttributeError:
+    #         print(f"WARNING: Malformed or non-existent html in '{path}'.  Doing nothing.")
 
     with open(f"out/{path}", "w") as f:
         f.write(output)
@@ -74,7 +72,7 @@ def main():
     """Main driver, runs if this file was explicitly executed."""
 
     cli_parser = argparse.ArgumentParser(description="Renders jinja2 templates as html")
-    cli_parser.add_argument("--generate", action='store_true', help="cause all jinja2 files in this directory to be rendered for prod")
+    cli_parser.add_argument("--generate", action='store_true', help="cause all jinja2 files in the current directory to be rendered for prod")
     args = cli_parser.parse_args()
 
     # setup dev folders
@@ -96,6 +94,8 @@ def main():
     server = livereload.Server()
     server.watch("*.html", build_manager.build_changed)
     server.watch("templates/*.html", build_manager.build_all)
+
+    build_manager.build_all()
 
     server.serve(root='out', open_url_delay=1)
 

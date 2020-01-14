@@ -13,7 +13,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/fastily/jinja2html",
     packages=setuptools.find_packages(),
-    install_requires=['jinja2', 'livereload', 'lxml'],
+    install_requires=['Jinja2', 'livereload'],
     entry_points={
         'console_scripts': [
             'jinja2html = jinja2html.jinja2html:main'
