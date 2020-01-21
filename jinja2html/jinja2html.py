@@ -3,6 +3,7 @@ import argparse
 import glob
 import os
 from pathlib import Path
+import shutil
 import time
 
 import livereload
@@ -48,7 +49,7 @@ class BuildManager():
 
     def __init__(self):
         """constructor, creates a new BuildManager"""
-        self.files = {}
+        self.files = {} # path : last_modified
 
     def build_changed(self):
         """Should be run whenever a jinja file in the current directory changes.  Finds files which have been modified since this method was last run and rebuilds the jinja files"""
@@ -67,6 +68,19 @@ class BuildManager():
         for f in glob.glob("*.html"):
             build(f)
 
+        self.build_css()
+
+    def build_css(self):
+        """Copy changed CSS into the out folder"""
+        for f in glob.glob("*.css"):
+            if f in self.files:
+                last_modified = os.path.getmtime(f)
+                if last_modified > self.files[f]:
+                    shutil.copy(f, "out")
+                    self.files[f] = last_modified
+            else:
+                shutil.copy(f, "out")
+                self.files[f] = time.time()
 
 def main():
     """Main driver, runs if this file was explicitly executed."""
@@ -94,6 +108,7 @@ def main():
     server = livereload.Server()
     server.watch("*.html", build_manager.build_changed)
     server.watch("templates/*.html", build_manager.build_all)
+    server.watch("*.css", build_manager.build_css)
 
     build_manager.build_all()
 
