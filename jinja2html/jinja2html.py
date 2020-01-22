@@ -1,6 +1,7 @@
 """main entry point for jinja2html"""
 import argparse
 import glob
+import json
 import os
 from pathlib import Path
 import shutil
@@ -21,8 +22,13 @@ def build(path, dev=True):
     Keyword Arguments:
         dev {bool} -- set True to enable development mode (injection of livereload js) (default: {True})
     """
+    if Path("config.json").is_file():
+        with open("config.json") as json_file:
+            context = json.load(json_file)
+    else:
+        context = {}
 
-    output = t_env.get_template(path).render()
+    output = t_env.get_template(path).render(context)
     # if dev:
     #     try:
     #         soup = BeautifulSoup(output, "lxml")
@@ -107,8 +113,9 @@ def main():
 
     server = livereload.Server()
     server.watch("*.html", build_manager.build_changed)
-    server.watch("templates/*.html", build_manager.build_all)
     server.watch("*.css", build_manager.build_css)
+    server.watch("templates/*.html", build_manager.build_all)
+    server.watch("config.json", build_manager.build_all)
 
     build_manager.build_all()
 
