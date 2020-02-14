@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="jinja2html",
-    version="0.0.1",
+    version="0.0.2",
     author="Fastily",
     author_email="fastily@users.noreply.github.com",
     description="dev-friendly generation of websites with jinja2 templates",
