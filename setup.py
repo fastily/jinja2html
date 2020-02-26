@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="jinja2html",
-    version="0.0.2",
+    version="0.1.0",
     author="Fastily",
     author_email="fastily@users.noreply.github.com",
     description="dev-friendly generation of websites with jinja2 templates",
@@ -13,7 +13,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/fastily/jinja2html",
     packages=setuptools.find_packages(),
-    install_requires=['Jinja2', 'livereload'],
+    install_requires=['Jinja2', 'lxml', 'watchdog', 'websockets'],
     entry_points={
         'console_scripts': [
             'jinja2html = jinja2html.jinja2html:main'

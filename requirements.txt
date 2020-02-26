@@ -1,2 +1,4 @@
 Jinja2==2.11.1
-livereload==2.6.1
+lxml==4.4.2
+watchdog==0.10.2
+websockets==8.1
