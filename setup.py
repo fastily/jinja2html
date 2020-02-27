@@ -8,12 +8,12 @@ setuptools.setup(
     version="0.1.0",
     author="Fastily",
     author_email="fastily@users.noreply.github.com",
-    description="dev-friendly generation of websites with jinja2 templates",
+    description="friendly generation of websites with jinja2 templates",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/fastily/jinja2html",
     packages=setuptools.find_packages(),
-    install_requires=['Jinja2', 'lxml', 'watchdog', 'websockets'],
+    install_requires=['beautifulsoup4', 'Jinja2', 'lxml', 'watchdog', 'websockets'],
     entry_points={
         'console_scripts': [
             'jinja2html = jinja2html.jinja2html:main'
