@@ -6,6 +6,8 @@ import glob
 import json
 import shutil
 
+import webbrowser
+
 import http.server
 import socketserver
 
@@ -174,13 +176,14 @@ def build_html(path, dev_mode=True):
             # actually add the script
             body_tag.append(soup.new_tag("script", src="https://cdn.jsdelivr.net/npm/livereload-js@3.2.1/dist/livereload.min.js",
                                          integrity="sha256-Tm7IcDz9uE2N6RbJ0yeZiLbQRSrtMMMhWEFyG5QD8DI=", crossorigin="anonymous"))
-            output = soup.prettify()
+            output = str(soup)
         except AttributeError:
             output = f"ERROR: Malformed or non-existent html in '{path}'.  Doing nothing."
             print(output)
 
     with open(f"{STATIC_SERVER_ROOT}/{path}", "w") as f:
         f.write(output)
+
 
 def main():
     cli_parser = argparse.ArgumentParser(description="Developer friendly rendering of jinja2 templates.")
@@ -209,9 +212,11 @@ def main():
         Thread(target=httpd.serve_forever, daemon=True).start()
 
         observer = Observer()
-        observer.schedule(MyHandler(["*.html", "*.js", "*.css"]), JINJA_WATCH_PATH, recursive=True)
+        observer.schedule(MyHandler(["*.html", "*.js", "*.css"]), JINJA_WATCH_PATH, True)
         observer.daemon = True
         observer.start()
+
+        webbrowser.open_new_tab("http://localhost:" + str(STATIC_SERVER_PORT))
 
         try:
             main_coroutine = wss_manager()
