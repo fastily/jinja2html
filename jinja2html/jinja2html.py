@@ -1,30 +1,28 @@
 #!/usr/bin/env python
+"""jinja2html - friendly generation of websites with jinja2 templates.  Main class and entry point."""
 
 import argparse
 import asyncio
-import glob
+import http.server
 import json
 import shutil
-
+import socketserver
 import webbrowser
 
-import http.server
-import socketserver
-
 from collections import defaultdict
-
-from queue import Queue
-from pathlib import Path
-
 from functools import partial
-from urllib.parse import urlparse
+from pathlib import Path
+from queue import Queue
 from threading import Thread
+from urllib.parse import urlparse
 
-from bs4 import BeautifulSoup
-from watchdog.observers import Observer
-from watchdog.events import PatternMatchingEventHandler
 import jinja2
 import websockets
+
+from bs4 import BeautifulSoup
+from watchdog.events import PatternMatchingEventHandler
+from watchdog.observers import Observer
+
 
 sessions = defaultdict(list)
 
@@ -34,13 +32,13 @@ STATIC_SERVER_PORT = 8000
 
 WEBSOCKET_SERVER_PORT = 35729
 
-STATIC_SERVER_ROOT = "out"
+STATIC_SERVER_ROOT = Path("out")
 
-JINJA_WATCH_PATH = "."
+JINJA_WATCH_PATH = Path(".")
 
-JINJA_TEMPLATE_DIR = "templates"
+JINJA_TEMPLATE_DIR = Path("templates")
 
-t_env = jinja2.Environment(loader=jinja2.FileSystemLoader(JINJA_WATCH_PATH), autoescape=True)
+t_env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(JINJA_WATCH_PATH)))
 
 
 async def ws_handler(websocket, path):
@@ -64,7 +62,7 @@ async def ws_handler(websocket, path):
         print("ERROR: Something went wrong during response from handshake: " + str(request_content))
         return
 
-    url_path = urlparse(request_content.get('url')).path
+    url_path = urlparse(request_content.get('url')).path.lstrip("/")
     sessions[url_path].append(websocket)
     print(sessions)
 
@@ -74,31 +72,34 @@ async def ws_handler(websocket, path):
             print("Recieved message from client: " + str(request_content))
     except websockets.exceptions.ConnectionClosedError:
         print("socket was closed by client.  Closing socket on our end")
-    except asyncio.CancelledError:
-        pass  # nobody cares
+    except BaseException:
+        await websocket.close()
     finally:
         sessions[url_path].remove(websocket)
-        print(sessions)
+        print(f"sessions is now: {sessions}")
 
 
 async def process_queue():
-    while True:
-        while not task_queue.empty():
-            element = task_queue.get_nowait()
+    try:
+        while True:
+            while not task_queue.empty():
+                element = task_queue.get_nowait()
 
-            if element.startswith(JINJA_WATCH_PATH):
-                element = element[len(JINJA_WATCH_PATH):]
+                if(JINJA_WATCH_PATH in element.parents):
+                    element = element.relative_to(JINJA_WATCH_PATH)
 
-            print(f"doing job with {element} and it matches with websocket: {element in sessions}")
-            message = f'{{"command": "reload", "path": "{element}", "liveCSS": false}}'
-            if element in sessions:
-                await asyncio.wait([socket.send(message) for socket in sessions[element]])
+                print(f"doing job with {element} and it matches with websocket: {str(element) in sessions}")
+                message = f'{{"command": "reload", "path": "{element}", "liveCSS": false}}'
+                if str(element) in sessions:
+                    await asyncio.wait([socket.send(message) for socket in sessions[str(element)]])
 
-            if element == "/index.html" and "/" in sessions:
-                await asyncio.wait([socket.send(message) for socket in sessions["/"]])
+                if element.name == "index.html" and "" in sessions:
+                    await asyncio.wait([socket.send(message) for socket in sessions[""]])
 
-            task_queue.task_done()
-        await asyncio.sleep(1)
+                task_queue.task_done()
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        pass
 
 
 async def ws_server():
@@ -106,7 +107,8 @@ async def ws_server():
         print("Serving websockets on localhost:" + str(WEBSOCKET_SERVER_PORT))
         my_server = await websockets.serve(ws_handler, "localhost", WEBSOCKET_SERVER_PORT)
         await my_server.wait_closed()
-    except asyncio.CancelledError:
+    except BaseException:
+        print("shutting down webserver...")
         my_server.close()
 
 
@@ -114,9 +116,8 @@ async def wss_manager():
     try:
         tasks = asyncio.gather(ws_server(), process_queue())
         await tasks
-    except asyncio.CancelledError:
+    except BaseException:
         tasks.cancel()
-        print("shutting down webserver")
 
 
 class MyHandler(PatternMatchingEventHandler):
@@ -131,21 +132,21 @@ class MyHandler(PatternMatchingEventHandler):
         if event.is_directory:
             return
 
-        path = event.src_path
+        path = Path(event.src_path)
         print(f"{event.event_type} -> got an update from {path}")
 
-        if path.startswith(JINJA_WATCH_PATH + "/" + STATIC_SERVER_ROOT):
+        if STATIC_SERVER_ROOT in path.parents:
             return
 
-        if path.startswith(JINJA_WATCH_PATH + "/" + JINJA_TEMPLATE_DIR) or path.endswith("/config.json"):
-            for path in glob.glob(JINJA_WATCH_PATH + "/*.html"):
-                build_html(path)
-                task_queue.put_nowait(path)
-        elif path.endswith((".css", ".CSS", ".js", ".JS")):
+        if JINJA_TEMPLATE_DIR in path.parents or path.name == "config.json":
+            for f in JINJA_WATCH_PATH.glob("*.html"):
+                build_html(f)
+                task_queue.put_nowait(f)
+
+        elif path.suffix.lower() in (".css", ".js"):
             copy_css_js(path)
-            for path in glob.glob(JINJA_WATCH_PATH + "/*.html"):
-                copy_css_js(path)
-                task_queue.put_nowait(path)
+            for f in JINJA_WATCH_PATH.glob("*.html"):
+                task_queue.put_nowait(f)
         else:  # just a normal jinja file
             build_html(path)
             task_queue.put_nowait(path)
@@ -156,13 +157,11 @@ def copy_css_js(path):
 
 
 def build_html(path, dev_mode=True):
-    if Path(JINJA_WATCH_PATH + "/config.json").is_file():
-        with open(JINJA_WATCH_PATH + "/config.json") as json_file:
-            context = json.load(json_file)
-    else:
-        context = {}
 
-    output = t_env.get_template(path).render(context)
+    config = JINJA_WATCH_PATH / "config.json"
+    context = json.load(config.read_text()) if config.is_file() else {}
+
+    output = t_env.get_template(str(path)).render(context)
     if dev_mode:
         try:
             soup = BeautifulSoup(output, "lxml")
@@ -181,8 +180,7 @@ def build_html(path, dev_mode=True):
             output = f"ERROR: Malformed or non-existent html in '{path}'.  Doing nothing."
             print(output)
 
-    with open(f"{STATIC_SERVER_ROOT}/{path}", "w") as f:
-        f.write(output)
+    (STATIC_SERVER_ROOT / path).write_text(output)
 
 
 def main():
@@ -191,28 +189,28 @@ def main():
     args = cli_parser.parse_args()
 
     # setup dev folders
-    Path(STATIC_SERVER_ROOT).mkdir(parents=True, exist_ok=True)
-    Path(JINJA_TEMPLATE_DIR).mkdir(parents=True, exist_ok=True)
+    STATIC_SERVER_ROOT.mkdir(parents=True, exist_ok=True)
+    JINJA_TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 
-    for p in Path(JINJA_WATCH_PATH).glob(STATIC_SERVER_ROOT + "/*"):
-        p.unlink()
-        print(f"Deleted: {str(p)}")
+    for f in STATIC_SERVER_ROOT.iterdir():
+        f.unlink()
+        print(f"Deleted: {str(f)}")
 
-    for p in Path(JINJA_WATCH_PATH).glob("*"):
-        if p.is_file():
-            ext = p.suffix.lower()
+    for f in Path(JINJA_WATCH_PATH).iterdir():
+        if f.is_file():
+            ext = f.suffix.lower()
             if ext in (".html", ".htm"):
-                build_html(str(p), not args.generate)
+                build_html(f, not args.generate)
             elif ext in (".js", ".css"):
-                copy_css_js(str(p))
+                copy_css_js(f)
 
     if not args.generate:
         print("serving static files on localhost:" + str(STATIC_SERVER_PORT))
-        httpd = socketserver.TCPServer(("", STATIC_SERVER_PORT), partial(http.server.SimpleHTTPRequestHandler, directory=STATIC_SERVER_ROOT))
+        httpd = socketserver.TCPServer(("", STATIC_SERVER_PORT), partial(http.server.SimpleHTTPRequestHandler, directory=str(STATIC_SERVER_ROOT)))
         Thread(target=httpd.serve_forever, daemon=True).start()
 
         observer = Observer()
-        observer.schedule(MyHandler(["*.html", "*.js", "*.css"]), JINJA_WATCH_PATH, True)
+        observer.schedule(MyHandler(["*.html", "*.js", "*.css"]), str(JINJA_WATCH_PATH), True)
         observer.daemon = True
         observer.start()
 
