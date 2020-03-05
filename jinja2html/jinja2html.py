@@ -42,6 +42,12 @@ t_env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(JINJA_WATCH_PATH))
 
 
 async def ws_handler(websocket, path):
+    """Handler managing websocket lifecycle.  Pass this to websockets.serve()
+
+    Arguments:
+        websocket {WebSocketServerProtocol} -- Provided by websockets.serve()
+        path {str} -- URL path which was called to create this websocket.  Not used by jinja2html.
+    """
     request_content = json.loads(await websocket.recv())
 
     # initial handshake
@@ -55,7 +61,7 @@ async def ws_handler(websocket, path):
 
     request_content = json.loads(await websocket.recv())
 
-    #  {'command': 'info', 'plugins': {'less': {'disable': False, 'version': '1.0'}}, 'url': 'http://localhost:8000/ok.html'}
+    #  sample reply: {'command': 'info', 'plugins': {'less': {'disable': False, 'version': '1.0'}}, 'url': 'http://localhost:8000/ok.html'}
     if(request_content.get("command") == "info"):
         print("Now connected to " + request_content.get('url'))
     else:
@@ -80,20 +86,21 @@ async def ws_handler(websocket, path):
 
 
 async def process_queue():
+    """Processes task_queue, notifying available clients of changed files, which were added by watchdog handler (MyHandler)"""
     try:
         while True:
             while not task_queue.empty():
-                element = task_queue.get_nowait()
+                p = task_queue.get_nowait()
 
-                if(JINJA_WATCH_PATH in element.parents):
-                    element = element.relative_to(JINJA_WATCH_PATH)
+                if(JINJA_WATCH_PATH in p.parents):
+                    p = p.relative_to(JINJA_WATCH_PATH)
 
-                print(f"doing job with {element} and it matches with websocket: {str(element) in sessions}")
-                message = f'{{"command": "reload", "path": "{element}", "liveCSS": false}}'
-                if str(element) in sessions:
-                    await asyncio.wait([socket.send(message) for socket in sessions[str(element)]])
+                print(f"doing job with {p} and it matches with websocket: {str(p) in sessions}")
+                message = f'{{"command": "reload", "path": "{p}", "liveCSS": false}}'
+                if str(p) in sessions:
+                    await asyncio.wait([socket.send(message) for socket in sessions[str(p)]])
 
-                if element.name == "index.html" and "" in sessions:
+                if p.name == "index.html" and "" in sessions:
                     await asyncio.wait([socket.send(message) for socket in sessions[""]])
 
                 task_queue.task_done()
@@ -103,6 +110,7 @@ async def process_queue():
 
 
 async def ws_server():
+    """Creates a websocket server and waits for it to be closed"""
     try:
         print("Serving websockets on localhost:" + str(WEBSOCKET_SERVER_PORT))
         my_server = await websockets.serve(ws_handler, "localhost", WEBSOCKET_SERVER_PORT)
@@ -113,6 +121,7 @@ async def ws_server():
 
 
 async def wss_manager():
+    """Entry point for asyncio operations in jinja2html"""
     try:
         tasks = asyncio.gather(ws_server(), process_queue())
         await tasks
@@ -121,14 +130,30 @@ async def wss_manager():
 
 
 class MyHandler(PatternMatchingEventHandler):
+    """Class which handles watchdog events, and either runs jinja renderer or copies new js/css to output folder."""
+
     def on_modified(self, event):
+        """Handles events where a file was modified
+
+        Arguments:
+            event {FileSystemEvent} -- The event
+        """
         self.__base_update_handler(event)
 
     def on_created(self, event):
+        """Handles events where a file was created
+
+        Arguments:
+            event {FileSystemEvent} -- The event
+        """
         self.__base_update_handler(event)
 
     def __base_update_handler(self, event):
-        print(self.patterns)
+        """Base handler for modified/created events
+
+        Arguments:
+            event {FileSystemEvent} -- The event
+        """
         if event.is_directory:
             return
 
@@ -153,11 +178,23 @@ class MyHandler(PatternMatchingEventHandler):
 
 
 def copy_css_js(path):
+    """Copies a file from the specified path to the output directory.  Overwrites filename in output directory if it already exists.  Use this for css/js changes.
+
+    Arguments:
+        path {pathlib.Path} -- The file to copy to the output directory.
+    """
     shutil.copy(path, STATIC_SERVER_ROOT)
 
 
 def build_html(path, dev_mode=True):
+    """Builds the specified jinja template as HTML.
 
+    Arguments:
+        path {path.Pathlib} -- The jinja template to build as html.  PRECONDITION: path *is* a valid jinja template
+
+    Keyword Arguments:
+        dev_mode {bool} -- Toggles developer mode (whether livereload script should be injected).  Set False if this is for production. (default: {True})
+    """
     config = JINJA_WATCH_PATH / "config.json"
     context = json.load(config.read_text()) if config.is_file() else {}
 
@@ -184,6 +221,7 @@ def build_html(path, dev_mode=True):
 
 
 def main():
+    """Main entry point; handles argument parsing, setup, and teardown"""
     cli_parser = argparse.ArgumentParser(description="Developer friendly rendering of jinja2 templates.")
     cli_parser.add_argument("--generate", action='store_true', help="render all jinja2 files in the current directory, no livereload")
     args = cli_parser.parse_args()
