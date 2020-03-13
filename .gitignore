@@ -20,3 +20,4 @@ dist
 *.html
 out
 templates
+config.json
