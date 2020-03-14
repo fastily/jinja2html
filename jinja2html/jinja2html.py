@@ -104,7 +104,7 @@ async def process_queue():
                 if str(p) in sessions:
                     await asyncio.wait([socket.send(message) for socket in sessions[str(p)]])
 
-                if p.name == "index.html" and "" in sessions:
+                if p.name == "index.html" and "" in sessions and sessions[""]:
                     await asyncio.wait([socket.send(message) for socket in sessions[""]])
 
                 task_queue.task_done()
@@ -162,10 +162,10 @@ class MyHandler(PatternMatchingEventHandler):
             return
 
         path = Path(event.src_path)
-        logging.info("%s -> got an update from %s", event.event_type, path)
-
         if STATIC_SERVER_ROOT in path.parents:
             return
+
+        logging.info("%s -> got an update from %s", event.event_type, path)
 
         if JINJA_TEMPLATE_DIR in path.parents or path.name == "config.json":
             for f in JINJA_WATCH_PATH.glob("*.html"):
@@ -285,10 +285,10 @@ class ColorFormatter(logging.Formatter):
             "CRITICAL": self.__colors.get("red"),
         }
 
-        self.reset = "\x1b[0m"
+        self.__reset = "\x1b[0m"
 
     def format(self, record):
-        record.msg = self.__formats.get(record.levelname) + record.msg + self.reset
+        record.msg = self.__formats.get(record.levelname) + record.msg + self.__reset
         return super().format(record)
 
 
