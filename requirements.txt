@@ -1,5 +1,5 @@
 beautifulsoup4==4.8.2
 Jinja2==2.11.1
-lxml==4.4.2
+lxml==4.5.0
 watchdog==0.10.2
 websockets==8.1

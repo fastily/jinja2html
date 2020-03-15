@@ -101,7 +101,7 @@ async def process_queue():
 
                 # print(f"doing job with {p} and it matches with websocket: {str(p) in sessions}")
                 message = f'{{"command": "reload", "path": "{p}", "liveCSS": false}}'
-                if str(p) in sessions:
+                if str(p) in sessions and sessions[str(p)]:
                     await asyncio.wait([socket.send(message) for socket in sessions[str(p)]])
 
                 if p.name == "index.html" and "" in sessions and sessions[""]:
@@ -228,6 +228,7 @@ def main():
     """Main entry point; handles argument parsing, setup, and teardown"""
     cli_parser = argparse.ArgumentParser(description="Developer friendly rendering of jinja2 templates.")
     cli_parser.add_argument("--generate", action='store_true', help="render all jinja2 files in the current directory, no livereload")
+    cli_parser.add_argument("--port", help="serve website on this port", type=int)
     args = cli_parser.parse_args()
 
     # setup dev folders
@@ -247,6 +248,11 @@ def main():
                 copy_css_js(f)
 
     if not args.generate:
+        # variables
+        if args.port:
+            global STATIC_SERVER_PORT
+            STATIC_SERVER_PORT = args.port
+
         sh = logging.StreamHandler()
         sh.setFormatter(ColorFormatter())
         logging.basicConfig(level=logging.INFO, handlers=[sh])
@@ -273,7 +279,10 @@ def main():
 
 
 class ColorFormatter(logging.Formatter):
+    """Custom logging Formatter for adding colors to log output."""
+
     def __init__(self):
+        """Create a new ColorFormatter"""
         super().__init__("%(asctime)s\n%(levelname)s: %(message)s", "%b %d, %Y %I:%M:%S %p")
 
         self.__colors = dict(zip(['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'], [f"\x1b[3{x}m" for x in range(8)]))
@@ -284,10 +293,17 @@ class ColorFormatter(logging.Formatter):
             "ERROR": self.__colors.get("red"),
             "CRITICAL": self.__colors.get("red"),
         }
-
         self.__reset = "\x1b[0m"
 
     def format(self, record):
+        """Formats a log with color based on log level.
+
+        Arguments:
+            record {LogRecord} -- The record representing the log line.  This is provided to us by the Logger.
+
+        Returns:
+            str -- the string to be logged in the terminal
+        """
         record.msg = self.__formats.get(record.levelname) + record.msg + self.__reset
         return super().format(record)
 
