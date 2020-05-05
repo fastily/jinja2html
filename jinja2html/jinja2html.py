@@ -42,12 +42,12 @@ JINJA_TEMPLATE_DIR = Path("templates")
 t_env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(JINJA_WATCH_PATH)))
 
 
-async def ws_handler(websocket, path):
+async def ws_handler(websocket, _):
     """Handler managing websocket lifecycle.  Pass this to websockets.serve()
 
     Arguments:
         websocket {WebSocketServerProtocol} -- Provided by websockets.serve()
-        path {str} -- URL path which was called to create this websocket.  Not used by jinja2html.
+        _ {str} -- URL path which was called to create this websocket.  Not used by jinja2html.
     """
     request_content = json.loads(await websocket.recv())
 
@@ -161,6 +161,7 @@ class MyHandler(PatternMatchingEventHandler):
         if event.is_directory:
             return
 
+        # do not process output files if in a nested dir
         path = Path(event.src_path)
         if STATIC_SERVER_ROOT in path.parents:
             return
@@ -181,13 +182,28 @@ class MyHandler(PatternMatchingEventHandler):
             task_queue.put_nowait(path)
 
 
+def resolve_output_path(path):
+    """Determines the path of an output file (as it applies to STATIC_SERVER_ROOT).  Automatically creates required subfolders.
+
+    Arguments:
+        path {pathlib.Path} -- The file to get the output path for
+
+    Returns:
+        [pathlib.Path] -- The output path for the specified file
+    """
+    out_file = STATIC_SERVER_ROOT / path.relative_to(JINJA_WATCH_PATH)
+    out_file.parent.mkdir(parents=True, exist_ok=True)  # create dir structure if it doesn't exist
+
+    return out_file
+
+
 def copy_css_js(path):
     """Copies a file from the specified path to the output directory.  Overwrites filename in output directory if it already exists.  Use this for css/js changes.
 
     Arguments:
         path {pathlib.Path} -- The file to copy to the output directory.
     """
-    shutil.copy(path, STATIC_SERVER_ROOT)
+    shutil.copy(path, resolve_output_path(path))
 
 
 def build_html(path, dev_mode=True):
@@ -221,7 +237,7 @@ def build_html(path, dev_mode=True):
             output = f"ERROR: Malformed or non-existent html in '{path}'.  Doing nothing."
             logging.error(output)
 
-    (STATIC_SERVER_ROOT / path).write_text(output)
+    resolve_output_path(path).write_text(output)
 
 
 def main():
@@ -231,16 +247,17 @@ def main():
     cli_parser.add_argument("--port", help="serve website on this port", type=int)
     args = cli_parser.parse_args()
 
+    if STATIC_SERVER_ROOT.is_dir():
+        shutil.rmtree(STATIC_SERVER_ROOT, ignore_errors=True)
+    elif STATIC_SERVER_ROOT.is_file():
+        raise IOError(f"{STATIC_SERVER_ROOT} is a file.  It must be deleted/renamed before jinja2html can continue.  Exiting now.")
+
     # setup dev folders
     STATIC_SERVER_ROOT.mkdir(parents=True, exist_ok=True)
     JINJA_TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 
-    for f in STATIC_SERVER_ROOT.iterdir():
-        f.unlink()
-        # print(f"Deleted: {str(f)}")
-
-    for f in Path(JINJA_WATCH_PATH).iterdir():
-        if f.is_file():
+    for f in Path(JINJA_WATCH_PATH).rglob("*"):
+        if f.is_file() and STATIC_SERVER_ROOT not in f.parents and JINJA_TEMPLATE_DIR not in f.parents:
             ext = f.suffix.lower()
             if ext in (".html", ".htm"):
                 build_html(f, not args.generate)
