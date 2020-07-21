@@ -21,3 +21,6 @@ dist
 out
 templates
 config.json
+
+# virtualenv
+venv_j2h

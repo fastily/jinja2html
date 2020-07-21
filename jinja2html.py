@@ -29,6 +29,8 @@ sessions = defaultdict(list)
 
 task_queue = Queue()
 
+DEV_MODE = True
+
 STATIC_SERVER_PORT = 8000
 
 WEBSOCKET_SERVER_PORT = 35729
@@ -38,6 +40,8 @@ STATIC_SERVER_ROOT = Path("out")
 JINJA_WATCH_PATH = Path(".")
 
 JINJA_TEMPLATE_DIR = Path("templates")
+
+IGNORED_DIRS = []
 
 t_env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(JINJA_WATCH_PATH)))
 
@@ -54,7 +58,7 @@ async def ws_handler(websocket, _):
     # initial handshake
     logging.debug("recieved message via websocket from a client: %s", str(request_content))
 
-    if(request_content.get("command") == "hello"):
+    if request_content.get("command") == "hello":
         await websocket.send('{"command": "hello", "protocols": ["http://livereload.com/protocols/official-7"], "serverName": "jinja2html"}')
     else:
         logging.error("Bad liveserver handshake request from a client: %s", str(request_content))
@@ -63,7 +67,7 @@ async def ws_handler(websocket, _):
     request_content = json.loads(await websocket.recv())
 
     #  sample reply: {'command': 'info', 'plugins': {'less': {'disable': False, 'version': '1.0'}}, 'url': 'http://localhost:8000/ok.html'}
-    if(request_content.get("command") == "info"):
+    if request_content.get("command") == "info":
         logging.info("New websocket connection estasblished at: %s", request_content.get('url'))
     else:
         logging.error("Something went wrong during response from handshake: %s", str(request_content))
@@ -96,10 +100,9 @@ async def process_queue():
             while not task_queue.empty():
                 p = task_queue.get_nowait()
 
-                if(JINJA_WATCH_PATH in p.parents):
+                if JINJA_WATCH_PATH in p.parents:
                     p = p.relative_to(JINJA_WATCH_PATH)
 
-                # print(f"doing job with {p} and it matches with websocket: {str(p) in sessions}")
                 message = f'{{"command": "reload", "path": "{p}", "liveCSS": false}}'
                 if str(p) in sessions and sessions[str(p)]:
                     await asyncio.wait([socket.send(message) for socket in sessions[str(p)]])
@@ -120,7 +123,7 @@ async def ws_server():
         my_server = await websockets.serve(ws_handler, "localhost", WEBSOCKET_SERVER_PORT)
         await my_server.wait_closed()
     except asyncio.CancelledError:
-        logging.debug("Recieved cancel in ws_server.  Doing nothing though.")
+        logging.debug("Received cancel in ws_server.  Doing nothing though.")
 
 
 async def wss_manager():
@@ -130,7 +133,7 @@ async def wss_manager():
         tasks = asyncio.gather(ws_server(), process_queue())
         await tasks
     except asyncio.CancelledError:
-        logging.debug("Recieved cancel in wss_manager.  Doing nothing though.")
+        logging.debug("Received cancel in wss_manager.  Doing nothing though.")
 
 
 class MyHandler(PatternMatchingEventHandler):
@@ -163,19 +166,18 @@ class MyHandler(PatternMatchingEventHandler):
 
         # do not process output files if in a nested dir
         path = Path(event.src_path)
-        if STATIC_SERVER_ROOT in path.parents:
+        if STATIC_SERVER_ROOT in path.parents or any(d in IGNORED_DIRS for d in path.parents):
             return
 
         logging.info("%s -> got an update from %s", event.event_type, path)
 
-        if JINJA_TEMPLATE_DIR in path.parents or path.name == "config.json":
-            for f in JINJA_WATCH_PATH.glob("*.html"):
+        if JINJA_TEMPLATE_DIR in path.parents or path.name == "config.json":  # is a template or config.json
+            for f in rglob_for("*.html"):
                 build_html(f)
                 task_queue.put_nowait(f)
-
         elif path.suffix.lower() in (".css", ".js"):
             copy_css_js(path)
-            for f in JINJA_WATCH_PATH.glob("*.html"):
+            for f in rglob_for("*.html"):
                 task_queue.put_nowait(f)
         else:  # just a normal jinja file
             build_html(path)
@@ -197,6 +199,19 @@ def resolve_output_path(path):
     return out_file
 
 
+def rglob_for(pattern):
+    """Perform a recursive glob for the specified patter in JINJA_WATCH_PATH which aren't in an ignored directory, in the server's output directory,
+    or in a jinja template directory.
+
+    Args:
+        pattern (str): The glob pattern to search for
+
+    Returns:
+        [path.Pathlib]: The matching files which aren't in an ignored directory, in the server's output directory, or in a jinja template directory.
+    """
+    return [f for f in JINJA_WATCH_PATH.rglob(pattern) if f.is_file() and STATIC_SERVER_ROOT not in f.parents and JINJA_TEMPLATE_DIR not in f.parents and not any(d in IGNORED_DIRS for d in f.parents)]
+
+
 def copy_css_js(path):
     """Copies a file from the specified path to the output directory.  Overwrites filename in output directory if it already exists.  Use this for css/js changes.
 
@@ -206,20 +221,17 @@ def copy_css_js(path):
     shutil.copy(path, resolve_output_path(path))
 
 
-def build_html(path, dev_mode=True):
+def build_html(path):
     """Builds the specified jinja template as HTML.
 
     Arguments:
         path {path.Pathlib} -- The jinja template to build as html.  PRECONDITION: path *is* a valid jinja template
-
-    Keyword Arguments:
-        dev_mode {bool} -- Toggles developer mode (whether livereload script should be injected).  Set False if this is for production. (default: {True})
     """
     config = JINJA_WATCH_PATH / "config.json"
     context = json.loads(config.read_text()) if config.is_file() else {}
 
     output = t_env.get_template(str(path)).render(context)
-    if dev_mode:
+    if DEV_MODE:
         try:
             soup = BeautifulSoup(output, "lxml")
             body_tag = soup.find("body")
@@ -230,9 +242,9 @@ def build_html(path, dev_mode=True):
             body_tag.append(script_tag)
 
             # actually add the script
-            body_tag.append(soup.new_tag("script", src="https://cdn.jsdelivr.net/npm/livereload-js@3.2.1/dist/livereload.min.js",
-                                         integrity="sha256-Tm7IcDz9uE2N6RbJ0yeZiLbQRSrtMMMhWEFyG5QD8DI=", crossorigin="anonymous"))
-            output = str(soup)
+            body_tag.append(soup.new_tag("script", src="https://cdn.jsdelivr.net/npm/livereload-js@3.2.4/dist/livereload.min.js",
+                                         integrity="sha256-pwYtkRoAac0pqizbVA5AP6Hqu37MkMjNOLF3tFx87jE=", crossorigin="anonymous"))
+            output = soup.prettify()
         except AttributeError:
             output = f"ERROR: Malformed or non-existent html in '{path}'.  Doing nothing."
             logging.error(output)
@@ -244,55 +256,71 @@ def main():
     """Main entry point; handles argument parsing, setup, and teardown"""
     cli_parser = argparse.ArgumentParser(description="Developer friendly rendering of jinja2 templates.")
     cli_parser.add_argument("--generate", action='store_true', help="render all jinja2 files in the current directory, no livereload")
-    cli_parser.add_argument("--port", help="serve website on this port", type=int)
+    cli_parser.add_argument('--ignore', nargs='+', type=Path, help="folders to ignore")
+    cli_parser.add_argument("--port", type=int, help="serve website on this port")
     args = cli_parser.parse_args()
 
+    # delete output directory if it exists
     if STATIC_SERVER_ROOT.is_dir():
         shutil.rmtree(STATIC_SERVER_ROOT, ignore_errors=True)
     elif STATIC_SERVER_ROOT.is_file():
         raise IOError(f"{STATIC_SERVER_ROOT} is a file.  It must be deleted/renamed before jinja2html can continue.  Exiting now.")
 
+    # check for generate flag
+    if args.generate:
+        global DEV_MODE
+        DEV_MODE = not args.generate
+
+    # ignored dirs flag
+    if args.ignore:
+        global IGNORED_DIRS
+        IGNORED_DIRS = args.ignore
+
     # setup dev folders
     STATIC_SERVER_ROOT.mkdir(parents=True, exist_ok=True)
     JINJA_TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 
-    for f in Path(JINJA_WATCH_PATH).rglob("*"):
-        if f.is_file() and STATIC_SERVER_ROOT not in f.parents and JINJA_TEMPLATE_DIR not in f.parents:
-            ext = f.suffix.lower()
-            if ext in (".html", ".htm"):
-                build_html(f, not args.generate)
-            elif ext in (".js", ".css"):
-                copy_css_js(f)
+    # generate all output files
+    for f in rglob_for("*"):
+        ext = f.suffix.lower()
+        if ext in (".html", ".htm"):
+            build_html(f)
+        elif ext in (".js", ".css"):
+            copy_css_js(f)
 
-    if not args.generate:
-        # variables
-        if args.port:
-            global STATIC_SERVER_PORT
-            STATIC_SERVER_PORT = args.port
+    # return if not development mode
+    if not DEV_MODE:
+        return
 
-        sh = logging.StreamHandler()
-        sh.setFormatter(ColorFormatter())
-        logging.basicConfig(level=logging.INFO, handlers=[sh])
+    # start watchers and webserver
+    if args.port:
+        global STATIC_SERVER_PORT
+        STATIC_SERVER_PORT = args.port
 
-        logging.info("Now serving website on http://localhost:%d", STATIC_SERVER_PORT)
-        socketserver.TCPServer.allow_reuse_address = True  # don't care about OSErrors
-        httpd = socketserver.TCPServer(("", STATIC_SERVER_PORT), partial(http.server.SimpleHTTPRequestHandler, directory=str(STATIC_SERVER_ROOT)))
-        Thread(target=httpd.serve_forever, daemon=True).start()
+    sh = logging.StreamHandler()
+    sh.setFormatter(ColorFormatter())
+    logging.basicConfig(level=logging.INFO, handlers=[sh])
 
-        logging.info("Now watching '%s' for html/js/css changes", JINJA_WATCH_PATH)
-        observer = Observer()
-        observer.schedule(MyHandler(["*.html", "*.js", "*.css"]), str(JINJA_WATCH_PATH), True)
-        observer.daemon = True
-        observer.start()
+    socketserver.TCPServer.allow_reuse_address = True  # don't care about OSErrors
+    httpd = socketserver.TCPServer(("localhost", STATIC_SERVER_PORT), partial(http.server.SimpleHTTPRequestHandler, directory=str(STATIC_SERVER_ROOT)))
+    Thread(target=httpd.serve_forever, daemon=True).start()
+    web_url = f"http://{httpd.server_address[0]}:{httpd.server_address[1]}"
+    logging.info("Serving website on %s", web_url)
 
-        webbrowser.open_new_tab("http://localhost:" + str(STATIC_SERVER_PORT))
+    logging.info("Watching '%s' for html/js/css changes", JINJA_WATCH_PATH)
+    observer = Observer()
+    observer.schedule(MyHandler(["*.html", "*.js", "*.css"]), str(JINJA_WATCH_PATH), True)
+    observer.daemon = True
+    observer.start()
 
-        try:
-            asyncio.run(wss_manager())
-        except KeyboardInterrupt:
-            observer.stop()
-            httpd.shutdown()
-            logging.warning("Keyboard interrupt - bye.")
+    webbrowser.open_new_tab(web_url)
+
+    try:
+        asyncio.run(wss_manager())
+    except KeyboardInterrupt:
+        observer.stop()
+        httpd.shutdown()
+        logging.warning("Keyboard interrupt - bye")
 
 
 class ColorFormatter(logging.Formatter):

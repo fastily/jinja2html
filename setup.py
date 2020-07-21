@@ -16,7 +16,7 @@ setuptools.setup(
     install_requires=['beautifulsoup4', 'Jinja2', 'lxml', 'watchdog', 'websockets'],
     entry_points={
         'console_scripts': [
-            'jinja2html = jinja2html.jinja2html:main'
+            'jinja2html = jinja2html:main'
         ]
     },
     classifiers=[
