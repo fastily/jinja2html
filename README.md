@@ -23,20 +23,29 @@ This installs the CLI command, `jinja2html`, which can be used to generate html 
 
 ## Usage
 ```
-usage: jinja2html.py [-h] [--generate]
+usage: jinja2html.py [-h] [--generate] [--ignore IGNORE [IGNORE ...]] [--port PORT]
 
-Renders jinja2 templates as html
+Developer friendly rendering of jinja2 templates.
 
 optional arguments:
-  -h, --help  show this help message and exit
-  --generate  cause all jinja2 files in this directory to be rendered for prod
+  -h, --help            show this help message and exit
+  --generate            render all jinja2 files in the current directory, no livereload
+  --ignore IGNORE [IGNORE ...]
+                        folders to ignore
+  --port PORT           serve website on this port
 ```
 
 #### Examples
 ```bash
 # run in dev mode, in the current directory
-python jinja2html
+jinja2html
 
 # generate html files for use in prod
-python jinja2html --generate
+jinja2html --generate
+
+# generate html files for use in prod and ignore folders Foo/ and Bar/
+jinja2html --generate --ignore Foo/ Bar/
+
+# run in dev mode, on port 8080 and ignore folder hello/world/
+jinja2html --port 8080 --ignore hello/world/
 ```
