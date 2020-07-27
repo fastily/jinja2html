@@ -242,8 +242,8 @@ def build_html(path):
             body_tag.append(script_tag)
 
             # actually add the script
-            body_tag.append(soup.new_tag("script", src="https://cdn.jsdelivr.net/npm/livereload-js@3.2.4/dist/livereload.min.js",
-                                         integrity="sha256-pwYtkRoAac0pqizbVA5AP6Hqu37MkMjNOLF3tFx87jE=", crossorigin="anonymous"))
+            body_tag.append(soup.new_tag("script", src="https://cdnjs.cloudflare.com/ajax/libs/livereload-js/3.2.4/livereload.min.js",
+                                         integrity="sha512-L9YxWbDx+I37Ul/VuKKmtTyRiQIMO77DpGd0itFs0G+1/E2vHG/XUHawZg8WHcjGf+tCMZpSWLTnAlAiUNtSxg==", crossorigin="anonymous"))
             output = str(soup)
         except AttributeError:
             output = f"ERROR: Malformed or non-existent html in '{path}'.  Doing nothing."
