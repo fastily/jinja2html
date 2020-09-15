@@ -164,8 +164,12 @@ class MyHandler(PatternMatchingEventHandler):
         if event.is_directory:
             return
 
+        # skip deleted/non-existent paths
+        if not (path := Path(event.src_path)).exists():
+            logging.warning("Observed change to non-existent path, %s, doing nothing", path)
+            return
+
         # do not process output files if in a nested dir
-        path = Path(event.src_path)
         if STATIC_SERVER_ROOT in path.parents or any(d in IGNORED_DIRS for d in path.parents):
             return
 
@@ -246,8 +250,7 @@ def build_html(path):
                                          integrity="sha512-DSycG/J5pRCjy6wZ8nfeqaKuSAf9jVmSulTuzy1xQL+2yyBIp7fwzNvx+tZCtZ6kIRMqiDyWOYSl4zYjT32zOw==", crossorigin="anonymous"))
             output = str(soup)
         except AttributeError:
-            output = f"ERROR: Malformed or non-existent html in '{path}'.  Doing nothing."
-            logging.error(output)
+            logging.warning(output := f"Malformed or non-existent html in '{path}'.  Doing nothing.")
 
     resolve_output_path(path).write_text(output)
 
