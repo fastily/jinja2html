@@ -234,9 +234,11 @@ def build_html(path):
     config = JINJA_WATCH_PATH / "config.json"
     context = json.loads(config.read_text()) if config.is_file() else {}
 
-    output = t_env.get_template(str(path)).render(context)
-    if DEV_MODE:
-        try:
+    try:
+        output = t_env.get_template(str(path)).render(context)
+
+        if DEV_MODE:
+            # try:
             soup = BeautifulSoup(output, "lxml")
             body_tag = soup.find("body")
 
@@ -249,10 +251,13 @@ def build_html(path):
             body_tag.append(soup.new_tag("script", src="https://cdnjs.cloudflare.com/ajax/libs/livereload-js/3.3.1/livereload.min.js",
                                          integrity="sha512-DSycG/J5pRCjy6wZ8nfeqaKuSAf9jVmSulTuzy1xQL+2yyBIp7fwzNvx+tZCtZ6kIRMqiDyWOYSl4zYjT32zOw==", crossorigin="anonymous"))
             output = str(soup)
-        except AttributeError:
-            logging.warning(output := f"Malformed or non-existent html in '{path}'.  Doing nothing.")
 
-    resolve_output_path(path).write_text(output)
+        resolve_output_path(path).write_text(output)
+
+    except AttributeError:
+        logging.warning("Malformed or non-existent html in '%s'.  Doing nothing.", path)
+    except Exception as e:
+        logging.exception(e)
 
 
 def main():
