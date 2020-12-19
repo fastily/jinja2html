@@ -169,6 +169,10 @@ class MyHandler(PatternMatchingEventHandler):
             logging.warning("Observed change to non-existent path, %s, doing nothing", path)
             return
 
+        # 3.9 hack - pathlib absolute and relative paths don't play well together, convert all absolute paths to relative.
+        if path.is_absolute():
+            path = path.resolve().relative_to(JINJA_WATCH_PATH.resolve())
+
         # do not process output files if in a nested dir
         if STATIC_SERVER_ROOT in path.parents or any(d in IGNORED_DIRS for d in path.parents):
             return
@@ -233,6 +237,8 @@ def build_html(path):
     """
     config = JINJA_WATCH_PATH / "config.json"
     context = json.loads(config.read_text()) if config.is_file() else {}
+
+    logging.debug("building html for %s", path)
 
     try:
         output = t_env.get_template(str(path)).render(context)
@@ -357,7 +363,7 @@ class ColorFormatter(logging.Formatter):
         Returns:
             str -- the string to be logged in the terminal
         """
-        record.msg = self.__formats.get(record.levelname) + record.msg + self.__reset
+        record.msg = self.__formats.get(record.levelname) + str(record.msg) + self.__reset
         return super().format(record)
 
 
