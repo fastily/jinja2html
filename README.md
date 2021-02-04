@@ -49,3 +49,6 @@ jinja2html --generate --ignore Foo/ Bar/
 # run in dev mode, on port 8080 and ignore folder hello/world/
 jinja2html --port 8080 --ignore hello/world/
 ```
+
+## Scope
+jinja2html is designed for small and simple static websites.  If you're trying to do something big and complex, then you should stick with the tooling of a conventional front-end framework.
