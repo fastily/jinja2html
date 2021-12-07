@@ -2,7 +2,6 @@
 
 import argparse
 import asyncio
-import http.server
 import json
 import logging
 
@@ -11,6 +10,7 @@ import webbrowser
 
 from collections import defaultdict
 from functools import partial
+from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from threading import Thread
 from urllib.parse import urlparse
@@ -23,30 +23,26 @@ from watchgod import awatch, Change
 from .core import Context, find_acceptable_files, JinjaWatcher, WebsiteManager
 
 
-sessions = defaultdict(list)
+_SESSIONS = defaultdict(list)
 
-WEBSOCKET_SERVER_PORT = 35729
-
+_WEBSOCKET_SERVER_PORT = 35729
 
 log = logging.getLogger(__name__)
 
 
-async def ws_handler(websocket: websockets.WebSocketServerProtocol):
-    """Handler managing websocket lifecycle.  Pass this to websockets.serve()
+async def ws_handler(websocket: websockets.WebSocketServerProtocol) -> None:
+    """Handler managing an individual websocket's lifecycle, for use with `websockets.serve`
 
-    Arguments:
-        websocket {WebSocketServerProtocol} -- Provided by websockets.serve()
-        _ {str} -- URL path which was called to create this websocket.  Not used by jinja2html.
+    Args:
+        websocket (websockets.WebSocketServerProtocol): The websocket object representing a new websocket connection.
     """
     request_content = json.loads(await websocket.recv())
+    log.debug("received message via websocket from a client: %s", request_content)
 
-    # initial handshake
-    log.debug("recieved message via websocket from a client: %s", request_content)
-
-    if request_content.get("command") == "hello":
+    if request_content.get("command") == "hello":  # initial handshake
         await websocket.send('{"command": "hello", "protocols": ["http://livereload.com/protocols/official-7"], "serverName": "jinja2html"}')
     else:
-        log.error("Bad liveserver handshake request from a client: %s", str(request_content))
+        log.error("Bad liveserver handshake request from a client: %s", request_content)
         return
 
     request_content = json.loads(await websocket.recv())
@@ -55,37 +51,36 @@ async def ws_handler(websocket: websockets.WebSocketServerProtocol):
     if request_content.get("command") == "info":
         log.info("New websocket connection estasblished at: %s", request_content.get('url'))
     else:
-        log.error("Something went wrong during response from handshake: %s", str(request_content))
+        log.error("Something went wrong during response from handshake: %s", request_content)
         return
 
     url_path = urlparse(request_content.get('url')).path.lstrip("/")
-    sessions[url_path].append(websocket)
+    _SESSIONS[url_path].append(websocket)
 
-    log.debug("added a new websocket, websocket sessions are now %s: ", sessions)
+    log.debug("added a new websocket, websocket sessions are now %s: ", _SESSIONS)
 
-    while True:
-        try:
-            request_content = json.loads(await websocket.recv())
-            log.info("Recieved message from client: %s", request_content)
-        except websockets.exceptions.WebSocketException as e:
-            log.info("Closing websocket on '%s'", url_path)  # TODO: specifics
-            break
-        except asyncio.CancelledError:
-            log.debug("Recieved cancel in ws_handler.  Doing nothing though.")
-            continue
+    try:
+        async for message in websocket:
+            log.info("received message from client: %s", message)
+    except websockets.exceptions.WebSocketException as e:
+        log.info("Closing websocket on '%s'", url_path)  # TODO: specifics
+    except asyncio.CancelledError:
+        log.debug("received cancel in ws_handler.  Doing nothing though.")
 
-    sessions[url_path].remove(websocket)
-    log.debug("removed a dead websocket, websocket sessions are now %s: ", sessions)
+    _SESSIONS[url_path].remove(websocket)
+    log.debug("removed a dead websocket, websocket sessions are now %s: ", _SESSIONS)
 
 
-async def process_queue(wm: WebsiteManager):
-    """Processes task_queue, notifying available clients of changed files, which were added by watchdog handler (MyHandler)"""
+async def changed_files_handler(wm: WebsiteManager) -> None:
+    """Detects and handles updates to watched html/js/css files.   Specifically, rebuild changed website files and notify websocket clients of changes.
 
+    Args:
+        wm (WebsiteManager):  The WebsiteManager to associate with this asyncio loop
+    """
     async for changes in awatch(wm.context.input_dir, watcher_cls=JinjaWatcher, watcher_kwargs={"context": wm.context}):
         rebuild: list[Path] = []
 
         for change, p in changes:
-
             if change in (Change.added, Change.modified):
                 rebuild.append(Path(p))
             else:
@@ -94,43 +89,47 @@ async def process_queue(wm: WebsiteManager):
         wm.process_files(rebuild)
 
         for p in rebuild:
-            p = p.relative_to(wm.context.input_dir)
+            stub = str(wm.context.stub_of(p))
+            message = f'{{"command": "reload", "path": "{stub}", "liveCSS": false}}'
 
-            message = f'{{"command": "reload", "path": "{p}", "liveCSS": false}}'
-            if str(p) in sessions and sessions[str(p)]:
-                await asyncio.wait([asyncio.create_task(socket.send(message)) for socket in sessions[str(p)]])
+            if _SESSIONS.get(stub):
+                await asyncio.wait([asyncio.create_task(socket.send(message)) for socket in _SESSIONS[stub]])
 
-            if p.name == "index.html" and "" in sessions and sessions[""]:
-                await asyncio.wait([asyncio.create_task(socket.send(message)) for socket in sessions[""]])
+            if p.name == "index.html" and _SESSIONS.get(""):
+                await asyncio.wait([asyncio.create_task(socket.send(message)) for socket in _SESSIONS[""]])
 
 
-async def ws_server():
+async def ws_server() -> None:
     """Creates a websocket server and waits for it to be closed"""
     try:
-        log.info("Serving websockets on http://localhost:%d", WEBSOCKET_SERVER_PORT)
-        async with websockets.serve(ws_handler, "localhost", WEBSOCKET_SERVER_PORT):
+        log.info("Serving websockets on http://localhost:%d", _WEBSOCKET_SERVER_PORT)
+        async with websockets.serve(ws_handler, "localhost", _WEBSOCKET_SERVER_PORT):
             await asyncio.Future()
 
     except asyncio.CancelledError:
         log.debug("Received cancel in ws_server.  Doing nothing though.")
 
 
-async def wss_manager(wm: WebsiteManager):
-    """Entry point for asyncio operations in jinja2html"""
+async def main_loop(wm: WebsiteManager) -> None:
+    """Entry point for asyncio operations in jinja2html
+
+    Args:
+        wm (WebsiteManager): The WebsiteManager to associate with this asyncio loop
+    """
     try:
         log.info("Setting up websocket server and process queue...")
-        tasks = asyncio.gather(ws_server(), process_queue(wm))
-        await tasks
+        await asyncio.gather(ws_server(), changed_files_handler(wm))
     except asyncio.CancelledError:
         log.debug("Received cancel in wss_manager.  Doing nothing though.")
 
 
-def _main():
+def _main() -> None:
     """Main entry point, runs when this script is invoked directly."""
     cli_parser = argparse.ArgumentParser(description="Render jinja2 templates as html/css/js")
     cli_parser.add_argument("-d", action="store_true", help="enable development mode (live-reload)")
     cli_parser.add_argument("-p", type=int, metavar="port", default=8000, help="serve website on this port")
     cli_parser.add_argument("--ignore", nargs="+", type=Path, metavar="ignored_dir", default=set(), help="directories to ignore")
+
     args = cli_parser.parse_args()
 
     c = Context(ignore_list=args.ignore, dev_mode=args.d)
@@ -145,17 +144,14 @@ def _main():
     log.addHandler(RichHandler(rich_tracebacks=True))
     log.setLevel(logging.INFO)
 
-    socketserver.TCPServer.allow_reuse_address = True  # don't care about OSErrors
-    httpd = socketserver.TCPServer(("localhost", args.p), partial(http.server.SimpleHTTPRequestHandler, directory=str(c.output_dir)))
-    Thread(target=httpd.serve_forever, daemon=True).start()
+    socketserver.TCPServer.allow_reuse_address = True  # ward off OSErrors
+    Thread(target=(httpd := socketserver.TCPServer(("localhost", args.p), partial(SimpleHTTPRequestHandler, directory=str(c.output_dir)))).serve_forever).start()
 
     webbrowser.open_new_tab(web_url := f"http://{httpd.server_address[0]}:{httpd.server_address[1]}")
-    log.info("Serving website on '%s'", web_url)
-
-    log.info("Watching '%s' for html/js/css changes", c.input_dir)
+    log.info("Serving website on '%s' and watching '%s' for html/js/css changes", web_url, c.input_dir)
 
     try:
-        asyncio.run(wss_manager(wm))
+        asyncio.run(main_loop(wm))
     except KeyboardInterrupt:
         print()
         httpd.shutdown()
