@@ -66,6 +66,28 @@ class Context:
         """
         return f.relative_to(self.input_dir)
 
+    def is_template(self, f: Path) -> bool:
+        """Convienience method, determines whether a file is a template (i.e. in the `self.template_dir` directory)
+
+        Args:
+            f (Path): The file to check.  Use an absolute `Path` for best results.
+
+        Returns:
+            bool: `True` if `f` is a template in the `self.template_dir` directory.
+        """
+        return self.template_dir in f.parents and _is_html(f)
+
+    def is_config_json(self, f: Path) -> bool:
+        """Convienience method, determines whether `f` is the `config.json` file.
+
+        Args:
+            f (Path): The file to check.  Use an absolute `Path` for best results.
+
+        Returns:
+            bool: `True` if `f` is the `config.json` file.
+        """
+        return f == self.config_json
+
     def should_watch_file(self, entry: DirEntry) -> bool:
         """Determines whether a file should be watched.  For use with the output of `os.scandir`
 
@@ -75,7 +97,7 @@ class Context:
         Returns:
             bool: `True` if the file should be watched.
         """
-        return Context._FILE_PATTERN.match(entry.name) or Path(entry.path) == self.config_json
+        return Context._FILE_PATTERN.match(entry.name) or self.is_config_json(Path(entry.path))
 
     def should_watch_dir(self, entry: DirEntry) -> bool:
         """Determines whether a directory should be watched.  For use with the output of `os.scandir`
@@ -114,9 +136,9 @@ class WebsiteManager:
         for f in files:
             (output_path := self.context.output_dir / (stub := self.context.stub_of(f))).parent.mkdir(parents=True, exist_ok=True)  # create dir structure if it doesn't exist
 
-            if (ext := f.suffix.lower()) in (".js", ".css"):
+            if f.suffix.lower() in (".js", ".css"):
                 shutil.copy(f, output_path)
-            elif ext in (".html", ".htm"):
+            elif _is_html(f):
                 log.debug("building html for %s", f)
 
                 try:
@@ -203,3 +225,15 @@ def find_acceptable_files(context: Context) -> set[Path]:
                         l.append(entry.path)
 
     return files
+
+
+def _is_html(f: Path) -> bool:
+    """Convenience method, determines whether `f` represents an HTML file.
+
+    Args:
+        f (Path): The file to check.
+
+    Returns:
+        bool: `True` if `f` is an html file.
+    """
+    return f.suffix.lower() in (".html", ".htm")

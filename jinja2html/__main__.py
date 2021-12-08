@@ -4,9 +4,7 @@ import argparse
 import asyncio
 import json
 import logging
-
 import socketserver
-import webbrowser
 
 from collections import defaultdict
 from functools import partial
@@ -14,6 +12,7 @@ from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from threading import Thread
 from urllib.parse import urlparse
+from webbrowser import open_new_tab
 
 import websockets
 
@@ -78,13 +77,17 @@ async def changed_files_handler(wm: WebsiteManager) -> None:
         wm (WebsiteManager):  The WebsiteManager to associate with this asyncio loop
     """
     async for changes in awatch(wm.context.input_dir, watcher_cls=JinjaWatcher, watcher_kwargs={"context": wm.context}):
-        rebuild: list[Path] = []
+        rebuild: set[Path] = set()
 
         for change, p in changes:
-            if change in (Change.added, Change.modified):
-                rebuild.append(Path(p))
+            if wm.context.is_template(p) or wm.context.is_config_json(p):
+                rebuild = find_acceptable_files(wm.context.input_dir)
+                break
+            elif change in (Change.added, Change.modified):
+                rebuild.add(Path(p))
             else:
-                pass  # TODO: deleted files
+                # (wm.context.output_dir / wm.context.stub_of(p)).unlink(True)
+                pass
 
         wm.process_files(rebuild)
 
@@ -135,8 +138,7 @@ def _main() -> None:
     c = Context(ignore_list=args.ignore, dev_mode=args.d)
     # c.clean()
 
-    wm = WebsiteManager(c)
-    wm.process_files(find_acceptable_files(c))
+    (wm := WebsiteManager(c)).process_files(find_acceptable_files(c))
 
     if not c.dev_mode:
         return
@@ -147,7 +149,7 @@ def _main() -> None:
     socketserver.TCPServer.allow_reuse_address = True  # ward off OSErrors
     Thread(target=(httpd := socketserver.TCPServer(("localhost", args.p), partial(SimpleHTTPRequestHandler, directory=str(c.output_dir)))).serve_forever).start()
 
-    webbrowser.open_new_tab(web_url := f"http://{httpd.server_address[0]}:{httpd.server_address[1]}")
+    open_new_tab(web_url := f"http://{httpd.server_address[0]}:{httpd.server_address[1]}")
     log.info("Serving website on '%s' and watching '%s' for html/js/css changes", web_url, c.input_dir)
 
     try:
