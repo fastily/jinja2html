@@ -1,0 +1,22 @@
+{% extends 'templates/base.html' %}
+
+{% set title = "index" %}
+
+{% block content %}
+{% raw %}
+<div class="container">
+    <h1>Content 1</h1>
+    <p>Check this out: <span id="targetMe"></span></p>
+</div>
+{% endraw %}
+{% endblock %}
+
+{% block scripts %}
+{% raw %}
+<p>testing</p>
+<script type="module">
+    import { helloWorld } from "./shared.js";
+    document.getElementById("targetMe").innerHTML = helloWorld();
+</script>
+{% endraw %}
+{% endblock %}

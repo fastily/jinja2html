@@ -1,0 +1,25 @@
+{% extends 'templates/base.html' %}
+
+{% set title = "index" %}
+
+{% block styles %}
+{% raw %}
+<link rel="stylesheet" href="shared.css">
+
+<style>
+    .wow {
+        color: indigo;
+        font-family: 'Trebuchet MS', sans-serif;
+    }
+</style>
+{% endraw %}
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="display-2">Content 2</h1>
+    <p class="boldAndGreen">Formatted with shared css!</p>
+    <p class="wow">Formatted with local css!</p>
+    <p>I like {{myConfig.food}}, {{myConfig.drink}}, {{myConfig.dessert}}</p>
+</div>
+{% endblock %}

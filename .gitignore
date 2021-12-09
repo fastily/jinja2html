@@ -16,11 +16,8 @@ build
 dist
 *.egg-info
 
-scratch*.py
+scratch*
 venv_jinja2html
 
 # generated files
-*.html
 out
-templates
-config.json

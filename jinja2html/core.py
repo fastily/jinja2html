@@ -236,4 +236,4 @@ def _is_html(f: Path) -> bool:
     Returns:
         bool: `True` if `f` is an html file.
     """
-    return f.suffix.lower() in (".html", ".htm")
+    return f.suffix.lower() in (".html", ".htm", ".jinja")
