@@ -122,13 +122,37 @@ class WebsiteManager:
         """
         self.context = context
 
-    def process_files(self, files: Iterable[Path]) -> None:
-        """Processes the specified files and saves them to the output directory.  Only acts on html/js/css files, everything else will be ignored.
+    def find_acceptable_files(self) -> set[Path]:
+        """Recursively searches the input directory, according to the input context, for files that should be processed.  Useful for cases when the whole website needs to be rebuilt.
+
+        Returns:
+            set[Path]: The files that should be processed.
+        """
+        l = deque([self.context.input_dir])
+        files = set()
+
+        while l:
+            with scandir(l.popleft()) as it:
+                for entry in it:
+                    if entry.is_file():
+                        if self.context.should_watch_file(entry):
+                            files.add(Path(entry.path))
+                    else:  # is_dir()
+                        if self.context.should_watch_dir(entry) and Path(entry.path) != self.context.template_dir:
+                            l.append(entry.path)
+
+        return files
+
+    def build_files(self, files: Iterable[Path] = (), auto_find: bool = False) -> None:
+        """Processes the specified files and saves them to the output directory.  Only acts on jinja/js/css files, everything else will be ignored.  If `auto_find` is `True`, then this method automatically rebuilds all eligible files in the input directory.
 
         Args:
-            files (Iterable[Path]): The files to generate website files for.
+            files (Iterable[Path], optional): The files to generate website files for.  Ignored if `auto_find` is `True`. Defaults to ().
+            auto_find (bool, optional): Set `True` to automatically rebuild all eligible files in the input directory.  Defaults to False.
         """
-        if not files:
+        if auto_find:
+            files = self.find_acceptable_files()
+        elif not files:
             return
 
         conf = json.loads(self.context.config_json.read_text()) if self.context.config_json.is_file() else {}
@@ -200,31 +224,6 @@ class JinjaWatcher(DefaultWatcher):
             bool: `True` if the directory should be watched.
         """
         return self.context.should_watch_dir(entry)
-
-
-def find_acceptable_files(context: Context) -> set[Path]:
-    """Recursively searches the input directory in `context` for files that should be processed.  Useful for cases when the whole website needs to be rebuilt.
-
-    Args:
-        context (Context): The context to use.
-
-    Returns:
-        set[Path]: The files that should be processed.
-    """
-    l = deque([context.input_dir])
-    files = set()
-
-    while l:
-        with scandir(l.popleft()) as it:
-            for entry in it:
-                if entry.is_file():
-                    if context.should_watch_file(entry):
-                        files.add(Path(entry.path))
-                else:  # is_dir()
-                    if context.should_watch_dir(entry) and Path(entry.path) != context.template_dir:
-                        l.append(entry.path)
-
-    return files
 
 
 def _is_html(f: Path) -> bool:

@@ -19,7 +19,7 @@ import websockets
 from rich.logging import RichHandler
 from watchgod import awatch, Change
 
-from .core import Context, find_acceptable_files, JinjaWatcher, WebsiteManager
+from .core import Context, JinjaWatcher, WebsiteManager
 
 
 _SESSIONS = defaultdict(list)
@@ -81,7 +81,7 @@ async def changed_files_handler(wm: WebsiteManager) -> None:
 
         for change, p in changes:
             if wm.context.is_template(p) or wm.context.is_config_json(p):
-                rebuild = find_acceptable_files(wm.context.input_dir)
+                rebuild = wm.find_acceptable_files()
                 break
             elif change in (Change.added, Change.modified):
                 rebuild.add(Path(p))
@@ -89,7 +89,7 @@ async def changed_files_handler(wm: WebsiteManager) -> None:
                 # (wm.context.output_dir / wm.context.stub_of(p)).unlink(True)
                 pass
 
-        wm.process_files(rebuild)
+        wm.build_files(rebuild)
 
         for p in rebuild:
             stub = str(wm.context.stub_of(p))
@@ -131,14 +131,17 @@ def _main() -> None:
     cli_parser = argparse.ArgumentParser(description="Render jinja2 templates as html/css/js")
     cli_parser.add_argument("-d", action="store_true", help="enable development mode (live-reload)")
     cli_parser.add_argument("-p", type=int, metavar="port", default=8000, help="serve website on this port")
-    cli_parser.add_argument("--ignore", nargs="+", type=Path, metavar="ignored_dir", default=set(), help="directories to ignore")
+    cli_parser.add_argument("-i", type=Path, metavar="input_dir", default=Path("."), help="The input directory (contianing jinja templates) to use.  Defaults to the current working directory.")
+    cli_parser.add_argument("-o", type=Path, metavar="output_dir", default=Path("out"), help="The output directory to write website output files to.  Defaults to ./out")
+    cli_parser.add_argument("-t", type=Path, metavar="template_dir", default=Path("templates"), help="Shared templates directory (this must be a subfolder of the input directory).  Defaults to ./templates")
+    cli_parser.add_argument("--blacklist", nargs="+", type=Path, metavar="ignored_dir", default=set(), help="directories to ignore")
 
     args = cli_parser.parse_args()
 
-    c = Context(ignore_list=args.ignore, dev_mode=args.d)
+    c = Context(args.i, args.o, args.t, args.blacklist, args.d)
     # c.clean()
 
-    (wm := WebsiteManager(c)).process_files(find_acceptable_files(c))
+    (wm := WebsiteManager(c)).build_files(auto_find=True)
 
     if not c.dev_mode:
         return

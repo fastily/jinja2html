@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.case import TestCase
 
-from jinja2html.core import Context, find_acceptable_files, WebsiteManager
+from jinja2html.core import Context, WebsiteManager
 
 
 _RES_DIR = Path("tests/resources").resolve()  # script is run from the root repo dir
@@ -19,11 +19,11 @@ class TestCore(TestCase):
     def test_find_acceptable_files(self):
         expected = {_SAMPLE_PROJECT / s for s in ("config.json", "content1.html", "content2.html", "index.html", "shared.css", "shared.js")}
         with TemporaryDirectory() as tempdir:
-            self.assertSetEqual(expected, find_acceptable_files(Context(_SAMPLE_PROJECT, Path(tempdir), _SAMPLE_TEMPLATES)))
+            self.assertSetEqual(expected, WebsiteManager(Context(_SAMPLE_PROJECT, Path(tempdir), _SAMPLE_TEMPLATES)).find_acceptable_files())
 
     def test_process_files(self):
         with TemporaryDirectory() as tempdir:
-            WebsiteManager(c := Context(_SAMPLE_PROJECT, Path(tempdir), _SAMPLE_TEMPLATES)).process_files(find_acceptable_files(c))
+            WebsiteManager(Context(_SAMPLE_PROJECT, Path(tempdir), _SAMPLE_TEMPLATES)).build_files(auto_find=True)
 
             self.assertFalse(dircmp(_RES_DIR / "expected_output", tempdir).diff_files)
 

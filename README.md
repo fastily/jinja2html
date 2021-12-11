@@ -1,4 +1,5 @@
 # jinja2html
+[![Build Status](https://github.com/fastily/jinja2html/workflows/build/badge.svg)](#)
 [![Python 3.9+](https://upload.wikimedia.org/wikipedia/commons/4/4f/Blue_Python_3.9%2B_Shield_Badge.svg)](https://www.python.org)
 [![License: GPL v3](https://upload.wikimedia.org/wikipedia/commons/8/86/GPL_v3_Blue_Badge.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
@@ -23,31 +24,34 @@ This installs the CLI command, `jinja2html`, which can be used to generate html 
 
 ## Usage
 ```
-usage: jinja2html.py [-h] [--generate] [--ignore IGNORE [IGNORE ...]] [--port PORT]
+usage: __main__.py [-h] [-d] [-p port] [-i input_dir] [-o output_dir] [-t template_dir] [--blacklist ignored_dir [ignored_dir ...]]
 
-Developer friendly rendering of jinja2 templates.
+Render jinja2 templates as html/css/js
 
 optional arguments:
   -h, --help            show this help message and exit
-  --generate            render all jinja2 files in the current directory, no livereload
-  --ignore IGNORE [IGNORE ...]
-                        folders to ignore
-  --port PORT           serve website on this port
+  -d                    enable development mode (live-reload)
+  -p port               serve website on this port
+  -i input_dir          The input directory (contianing jinja templates) to use. Defaults to the current working directory.
+  -o output_dir         The output directory to write website output files to. Defaults to ./out
+  -t template_dir       Shared templates directory (this must be a subfolder of the input directory). Defaults to ./templates
+  --blacklist ignored_dir [ignored_dir ...]
+                        directories to ignore
 ```
 
 #### Examples
 ```bash
-# run in dev mode, in the current directory
+# generate html files for use in prod
 jinja2html
 
-# generate html files for use in prod
-jinja2html --generate
+# run in dev mode, in the current directory
+jinja2html -d
 
 # generate html files for use in prod and ignore folders Foo/ and Bar/
-jinja2html --generate --ignore Foo/ Bar/
+jinja2html -d --blacklist Foo/ Bar/
 
 # run in dev mode, on port 8080 and ignore folder hello/world/
-jinja2html --port 8080 --ignore hello/world/
+jinja2html -p 8080 --blacklist hello/world/
 ```
 
 ## Scope
