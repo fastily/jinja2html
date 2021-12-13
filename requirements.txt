@@ -1,6 +1,6 @@
 beautifulsoup4==4.10.0
 Jinja2==3.0.3
-lxml==4.6.4
+lxml==4.6.5
 rich==10.15.2
 watchgod==0.7
 websockets==10.1
