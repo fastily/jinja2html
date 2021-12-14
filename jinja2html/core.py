@@ -26,19 +26,19 @@ class Context:
 
     _NOT_DIR_PATTERN = re.compile(r"(\.|venv_|__pycache)")
 
-    def __init__(self, input_dir: Path = Path("."), output_dir: Path = Path("out"), template_dir: Path = Path("./templates"), ignore_list: set[Path] = set(), dev_mode: bool = False) -> None:
+    def __init__(self, input_dir: Path = Path("."), output_dir: Path = Path("out"), template_dir: str = "templates", ignore_list: set[Path] = set(), dev_mode: bool = False) -> None:
         """Initializer, creates a new `Context`.  For best results, all `Path` type arguments should be absolute (this is automatically done in the initializer, but if you want to change the properties after initializing, make sure you do this).
 
         Args:
             input_dir (Path, optional): The directory to watch for changes. Defaults to Path(".").
             output_dir (Path, optional): The directory to save generated files. Defaults to Path("out").
-            template_dir (Path, optional): The directory containing jinja2 mixin-type templates. Defaults to Path("./templates").
+            template_dir (str, optional): The directory containing jinja2 mixin-type templates.  If it exists, this is the name of a folder under `input_dir`. Defaults to "templates".
             ignore_list (set[Path], optional): The set of directories to ignore (will not be watched, even if `input_dir` is a parent folder). Defaults to set().
             dev_mode (bool, optional): Flag which turns on development mode (i.e. livereload server). Defaults to False.
         """
         self.input_dir: Path = input_dir.resolve()
         self.output_dir: Path = output_dir.resolve()
-        self.template_dir: Path = template_dir.resolve()
+        self.template_dir: Path = self.input_dir / template_dir
         self.dev_mode: bool = dev_mode
 
         self.ignore_list: set[Path] = {p.resolve() for p in ignore_list} if ignore_list else ignore_list
@@ -75,7 +75,7 @@ class Context:
         Returns:
             bool: `True` if `f` is a template in the `self.template_dir` directory.
         """
-        return self.template_dir in f.parents and _is_html(f)
+        return self.template_dir in f.parents and is_html(f)
 
     def is_config_json(self, f: Path) -> bool:
         """Convienience method, determines whether `f` is the `config.json` file.
@@ -160,9 +160,9 @@ class WebsiteManager:
         for f in files:
             (output_path := self.context.output_dir / (stub := self.context.stub_of(f))).parent.mkdir(parents=True, exist_ok=True)  # create dir structure if it doesn't exist
 
-            if f.suffix.lower() in (".js", ".css"):
+            if is_css_js(f):
                 shutil.copy(f, output_path)
-            elif _is_html(f):
+            elif is_html(f):
                 log.debug("building html for %s", f)
 
                 try:
@@ -226,13 +226,38 @@ class JinjaWatcher(DefaultWatcher):
         return self.context.should_watch_dir(entry)
 
 
-def _is_html(f: Path) -> bool:
-    """Convenience method, determines whether `f` represents an HTML file.
+def _is_ext(f: Path, ext: tuple[str]) -> bool:
+    """Determines whether a file has one of the specified extension(s).
+
+    Args:
+        f (Path): The file to check.
+        ext (tuple[str]): The extension(s) to check for.  These should be lower case.
+
+    Returns:
+        bool: `True` if `f` has an extension in `ext`.
+    """
+    return f.suffix.lower() in ext
+
+
+def is_css_js(f: Path) -> bool:
+    """Convenience method, determines whether `f` represents a css/js file.
 
     Args:
         f (Path): The file to check.
 
     Returns:
-        bool: `True` if `f` is an html file.
+        bool: `True` if `f` is a css/js file.
     """
-    return f.suffix.lower() in (".html", ".htm", ".jinja")
+    return _is_ext(f, (".css", ".js"))
+
+
+def is_html(f: Path) -> bool:
+    """Convenience method, determines whether `f` represents an jinja file.
+
+    Args:
+        f (Path): The file to check.
+
+    Returns:
+        bool: `True` if `f` is a jinja file.
+    """
+    return _is_ext(f, (".html", ".htm", ".jinja"))

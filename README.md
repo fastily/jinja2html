@@ -34,7 +34,7 @@ optional arguments:
   -p port               serve website on this port
   -i input_dir          The input directory (contianing jinja templates) to use. Defaults to the current working directory.
   -o output_dir         The output directory to write website output files to. Defaults to ./out
-  -t template_dir       Shared templates directory (this must be a subfolder of the input directory). Defaults to ./templates
+  -t template_dir       Shared templates directory (relative path only, this must be a subfolder of the input directory). Defaults to templates
   --blacklist ignored_dir [ignored_dir ...]
                         directories to ignore
 ```
@@ -51,7 +51,7 @@ jinja2html -d
 jinja2html -d --blacklist Foo/ Bar/
 
 # run in dev mode, on port 8080 and ignore folder hello/world/
-jinja2html -p 8080 --blacklist hello/world/
+jinja2html -d -p 8080 --blacklist hello/world/
 ```
 
 ## Scope

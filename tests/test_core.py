@@ -19,17 +19,17 @@ class TestCore(TestCase):
     def test_find_acceptable_files(self):
         expected = {_SAMPLE_PROJECT / s for s in ("config.json", "content1.html", "content2.html", "index.html", "shared.css", "shared.js")}
         with TemporaryDirectory() as tempdir:
-            self.assertSetEqual(expected, WebsiteManager(Context(_SAMPLE_PROJECT, Path(tempdir), _SAMPLE_TEMPLATES)).find_acceptable_files())
+            self.assertSetEqual(expected, WebsiteManager(Context(_SAMPLE_PROJECT, Path(tempdir))).find_acceptable_files())
 
     def test_process_files(self):
         with TemporaryDirectory() as tempdir:
-            WebsiteManager(Context(_SAMPLE_PROJECT, Path(tempdir), _SAMPLE_TEMPLATES)).build_files(auto_find=True)
+            WebsiteManager(Context(_SAMPLE_PROJECT, Path(tempdir))).build_files(auto_find=True)
 
             self.assertFalse(dircmp(_RES_DIR / "expected_output", tempdir).diff_files)
 
     def test_sanity(self):
         with TemporaryDirectory() as tempdir:
-            c = Context(_SAMPLE_PROJECT, Path(tempdir), _SAMPLE_TEMPLATES)
+            c = Context(_SAMPLE_PROJECT, Path(tempdir))
 
             self.assertEqual(Path("index.html"), c.stub_of(_SAMPLE_PROJECT / "index.html"))
             self.assertEqual(Path("shared.js"), c.stub_of(_SAMPLE_PROJECT / "shared.js"))

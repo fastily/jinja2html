@@ -19,7 +19,7 @@ import websockets
 from rich.logging import RichHandler
 from watchgod import awatch, Change
 
-from .core import Context, JinjaWatcher, WebsiteManager
+from .core import Context, is_css_js, JinjaWatcher, WebsiteManager
 
 
 _SESSIONS = defaultdict(list)
@@ -77,21 +77,28 @@ async def changed_files_handler(wm: WebsiteManager) -> None:
         wm (WebsiteManager):  The WebsiteManager to associate with this asyncio loop
     """
     async for changes in awatch(wm.context.input_dir, watcher_cls=JinjaWatcher, watcher_kwargs={"context": wm.context}):
-        rebuild: set[Path] = set()
+        l: set[Path] = set()
+        build_all = notify_all = False
 
         for change, p in changes:
+            p = Path(p)
             if wm.context.is_template(p) or wm.context.is_config_json(p):
-                rebuild = wm.find_acceptable_files()
+                l = wm.find_acceptable_files()
+                build_all = True
                 break
             elif change in (Change.added, Change.modified):
-                rebuild.add(Path(p))
+                l.add(p)
+                if is_css_js(p):
+                    notify_all = True
             else:
-                # (wm.context.output_dir / wm.context.stub_of(p)).unlink(True)
-                pass
+                (wm.context.output_dir / wm.context.stub_of(p)).unlink(True)
 
-        wm.build_files(rebuild)
+        wm.build_files(l)
 
-        for p in rebuild:
+        if notify_all and not build_all:
+            l = wm.find_acceptable_files()
+
+        for p in l:
             stub = str(wm.context.stub_of(p))
             message = f'{{"command": "reload", "path": "{stub}", "liveCSS": false}}'
 
@@ -133,14 +140,12 @@ def _main() -> None:
     cli_parser.add_argument("-p", type=int, metavar="port", default=8000, help="serve website on this port")
     cli_parser.add_argument("-i", type=Path, metavar="input_dir", default=Path("."), help="The input directory (contianing jinja templates) to use.  Defaults to the current working directory.")
     cli_parser.add_argument("-o", type=Path, metavar="output_dir", default=Path("out"), help="The output directory to write website output files to.  Defaults to ./out")
-    cli_parser.add_argument("-t", type=Path, metavar="template_dir", default=Path("templates"), help="Shared templates directory (this must be a subfolder of the input directory).  Defaults to ./templates")
+    cli_parser.add_argument("-t", type=str, metavar="template_dir", default="templates", help="Shared templates directory (relative path only, this must be a subfolder of the input directory).  Defaults to templates")
     cli_parser.add_argument("--blacklist", nargs="+", type=Path, metavar="ignored_dir", default=set(), help="directories to ignore")
 
     args = cli_parser.parse_args()
 
-    c = Context(args.i, args.o, args.t, args.blacklist, args.d)
-    # c.clean()
-
+    (c := Context(args.i, args.o, args.t, args.blacklist, args.d)).clean()
     (wm := WebsiteManager(c)).build_files(auto_find=True)
 
     if not c.dev_mode:
