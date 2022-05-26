@@ -13,7 +13,7 @@ Blogging frameworks are a *dime a dozen*.  But what if you don't want to write a
 
 That's where jinja2html comes in.
 
-No fancy bells and whistles, no bull$hit, just your bold artisitic vision + jinja2html.
+No fancy bells and whistles, no bull$hit, just your bold artistic vision + jinja2html.
 
 ## Install
 ```bash
