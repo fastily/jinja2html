@@ -17,9 +17,9 @@ from webbrowser import open_new_tab
 import websockets
 
 from rich.logging import RichHandler
-from watchgod import awatch, Change
+from watchfiles import awatch, Change
 
-from .core import Context, is_css_js, JinjaWatcher, WebsiteManager
+from .core import Context, is_css_js, WebsiteManager
 
 
 _SESSIONS = defaultdict(list)
@@ -76,7 +76,7 @@ async def changed_files_handler(wm: WebsiteManager) -> None:
     Args:
         wm (WebsiteManager):  The WebsiteManager to associate with this asyncio loop
     """
-    async for changes in awatch(wm.context.input_dir, watcher_cls=JinjaWatcher, watcher_kwargs={"context": wm.context}):
+    async for changes in awatch(wm.context.input_dir, watch_filter=wm.jinja_filter):
         l: set[Path] = set()
         build_all = notify_all = False
 

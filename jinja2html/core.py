@@ -6,25 +6,24 @@ import re
 import shutil
 
 from collections import deque, Iterable
-from os import DirEntry, scandir
+from os import scandir
 from pathlib import Path
-from typing import Union
 
 import jinja2
 
 from bs4 import BeautifulSoup
-from watchgod import DefaultWatcher
+from watchfiles import Change, DefaultFilter
 
 
 log = logging.getLogger(__name__)
 
+_FILE_PATTERN = re.compile(r"[^.].+\.(html|htm|css|js)", re.IGNORECASE)
+
+# _NOT_DIR_PATTERN = re.compile(r"(\.|venv_|__pycache)")
+
 
 class Context:
     """Collects shared configuration and simple methods for determining which files/directories to watch.  There should only be one instance of this during the program's lifeycle."""
-
-    _FILE_PATTERN = re.compile(r"[^.].+\.(html|htm|css|js)", re.IGNORECASE)
-
-    _NOT_DIR_PATTERN = re.compile(r"(\.|venv_|__pycache)")
 
     def __init__(self, input_dir: Path = Path("."), output_dir: Path = Path("out"), template_dir: str = "templates", ignore_list: set[Path] = set(), dev_mode: bool = False) -> None:
         """Initializer, creates a new `Context`.  For best results, all `Path` type arguments should be absolute (this is automatically done in the initializer, but if you want to change the properties after initializing, make sure you do this).
@@ -88,27 +87,16 @@ class Context:
         """
         return f == self.config_json
 
-    def should_watch_file(self, entry: DirEntry) -> bool:
-        """Determines whether a file should be watched.  For use with the output of `os.scandir`
+    def should_watch_file(self, p: str) -> bool:
+        """Determines whether a file should be watched.
 
         Args:
-            entry (DirEntry): The file to check.
+            entry (str): The path to the file to check.  Must be a full path.
 
         Returns:
             bool: `True` if the file should be watched.
         """
-        return Context._FILE_PATTERN.match(entry.name) or self.is_config_json(Path(entry.path))
-
-    def should_watch_dir(self, entry: DirEntry) -> bool:
-        """Determines whether a directory should be watched.  For use with the output of `os.scandir`
-
-        Args:
-            entry (DirEntry): The directory to check.
-
-        Returns:
-            bool: `True` if the directory should be watched.
-        """
-        return Path(entry.path) not in self.ignore_list and not Context._NOT_DIR_PATTERN.match(entry.name)
+        return _FILE_PATTERN.match(p) or self.is_config_json(Path(p))
 
 
 class WebsiteManager:
@@ -121,6 +109,7 @@ class WebsiteManager:
             context (Context): The `Context` to use.
         """
         self.context = context
+        self.jinja_filter = JinjaFilter(context)
 
     def find_acceptable_files(self) -> set[Path]:
         """Recursively searches the input directory, according to the input context, for files that should be processed.  Useful for cases when the whole website needs to be rebuilt.
@@ -134,11 +123,13 @@ class WebsiteManager:
         while l:
             with scandir(l.popleft()) as it:
                 for entry in it:
+                    entry_as_path = Path(entry)
+
                     if entry.is_file():
-                        if self.context.should_watch_file(entry):
-                            files.add(Path(entry.path))
+                        if self.context.should_watch_file(entry.path):
+                            files.add(entry_as_path)
                     else:  # is_dir()
-                        if self.context.should_watch_dir(entry) and Path(entry.path) != self.context.template_dir:
+                        if entry_as_path not in self.context.ignore_list and entry_as_path != self.context.template_dir and self.jinja_filter(Change.added, entry.path):
                             l.append(entry.path)
 
         return files
@@ -178,7 +169,7 @@ class WebsiteManager:
                         body_tag.append(script_tag)
 
                         # add livereload script
-                        body_tag.append(soup.new_tag("script", src="https://cdnjs.cloudflare.com/ajax/libs/livereload-js/3.3.2/livereload.min.js", integrity="sha512-XO7rFek26Xn8H4HecfAv2CwBbYsJE+RovkwE0nc0kYD+1yJr2OQOOEKSjOsmzE8rTrjP6AoXKFMqReMHj0Pjkw==", crossorigin="anonymous"))
+                        body_tag.append(soup.new_tag("script", src="https://cdnjs.cloudflare.com/ajax/libs/livereload-js/3.4.1/livereload.min.js", integrity="sha512-rclIrxzYHDmi28xeUES7WqX493chZ4LFEdbjMAUYiosJlKqham0ZujKU539fTFnZywE0c76XIRl9pLJ05OJPKA==", crossorigin="anonymous"))
                         output = str(soup)
 
                     output_path.write_text(output)
@@ -189,41 +180,29 @@ class WebsiteManager:
                     log.error("Unable to build HTML!", exc_info=True)
 
 
-class JinjaWatcher(DefaultWatcher):
-    """An `AllWatcher` subclass for use with `watchgod`"""
+class JinjaFilter(DefaultFilter):
+    """A `DefaultFilter` subclass which only finds jinja2html-related files, for use `watchfiles`."""
 
-    def __init__(self, root_path: Union[Path, str] = None, context: Context = Context()) -> None:
-        """Initializer, creates a new `JinjaWatcher`.
+    def __init__(self, context: Context) -> None:
+        """Initializer, creates a new `JinjaFilter`.
 
         Args:
-            root_path (Union[Path, str], optional): The root path (input) directory to watch. Defaults to None.
-            context (Context, optional): The `Context` to use. Defaults to Context().
+            context (Context): The `Context` to use.
         """
         self.context = context
+        super().__init__(ignore_paths=tuple(context.ignore_list))
 
-        super().__init__(root_path or context.input_dir)
-
-    def should_watch_file(self, entry: DirEntry) -> bool:
-        """Determines whether a file should be watched.
-
-        Args:
-            entry (DirEntry): The file to check.
-
-        Returns:
-            bool: `True` if the file should be watched.
-        """
-        return self.context.should_watch_file(entry)
-
-    def should_watch_dir(self, entry: DirEntry) -> bool:
-        """Determines whether a directory should be watched.
+    def __call__(self, change: Change, path: str) -> bool:
+        """Gets called by `watchfiles` when it checks if changes to a path should be reported.
 
         Args:
-            entry (DirEntry): The directory to check.
+            change (Change): The kind of `Change` detected
+            path (str): The path that was changed.
 
         Returns:
-            bool: `True` if the directory should be watched.
+            bool: `True` if the change should be reported.
         """
-        return self.context.should_watch_dir(entry)
+        return self.context.should_watch_file(path) and super().__call__(change, path)
 
 
 def _is_ext(f: Path, ext: tuple[str]) -> bool:
