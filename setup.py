@@ -17,7 +17,7 @@ setuptools.setup(
     },
     include_package_data=True,
     packages=setuptools.find_packages(include=["jinja2html"]),
-    install_requires=['beautifulsoup4', 'Jinja2', 'lxml', 'rich', 'watchgod', 'websockets'],
+    install_requires=['beautifulsoup4', 'Jinja2', 'lxml', 'rich', 'starlette', 'uvicorn[standard]', 'watchfiles'],
     entry_points={
         'console_scripts': [
             'jinja2html = jinja2html.__main__:_main'

@@ -5,7 +5,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.case import TestCase
 
-from jinja2html.core import Context, WebsiteManager
+from jinja2html.build_context import Context
+from jinja2html.website_manager import WebsiteManager
 
 
 _RES_DIR = Path("tests/resources").resolve()  # script is run from the root repo dir
