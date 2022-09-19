@@ -2,9 +2,9 @@
 
 import logging
 import re
-import shutil
 
 from pathlib import Path
+from shutil import rmtree
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -42,7 +42,7 @@ class Context:
 
     def clean(self) -> None:
         """Delete the output directory and regenerate all directories used by jinja2html."""
-        # shutil.rmtree(self.output_dir, ignore_errors=True)
+        rmtree(self.output_dir, ignore_errors=True)
 
         self.input_dir.mkdir(parents=True, exist_ok=True)
         self.template_dir.mkdir(parents=True, exist_ok=True)

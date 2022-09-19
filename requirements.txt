@@ -4,4 +4,4 @@ lxml==4.9.1
 rich==12.5.1
 starlette==0.20.4
 uvicorn[standard]==0.18.3
-watchfiles==0.17.0
+# watchfiles==0.17.0
