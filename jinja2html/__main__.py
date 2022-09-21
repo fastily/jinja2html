@@ -22,6 +22,7 @@ def _main() -> None:
     cli_parser.add_argument("-i", type=Path, metavar="input_dir", default=Path("."), help="The input directory (contianing jinja templates) to use.  Defaults to the current working directory.")
     cli_parser.add_argument("-o", type=Path, metavar="output_dir", default=Path("out"), help="The output directory to write website output files to.  Defaults to ./out")
     cli_parser.add_argument("-t", type=str, metavar="template_dir", default="templates", help="Shared templates directory (relative path only, this must be a subfolder of the input directory).  Defaults to templates")
+    cli_parser.add_argument("--debug", action="store_true", help="Enables debug level logging")
     cli_parser.add_argument("--blacklist", nargs="+", type=Path, metavar="ignored_dir", default=set(), help="directories to ignore")
 
     args = cli_parser.parse_args()
@@ -34,7 +35,7 @@ def _main() -> None:
 
     log = logging.getLogger("jinja2html")
     log.addHandler(RichHandler(rich_tracebacks=True))
-    log.setLevel(logging.DEBUG)
+    log.setLevel(logging.DEBUG if args.debug else logging.INFO)
 
     log.info("Serving website on 'localhost:%d' and watching '%s' for html/js/css changes", args.p, c.input_dir)
 

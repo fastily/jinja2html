@@ -150,7 +150,7 @@ async def send_msgs(message: dict, sockets: Iterable[WebSocket]) -> None:
         message (dict): The message to send - this will be converted to json
         sockets (Iterable[WebSocket]): The `WebSocket` objects to send `message` to.
     """
-    await asyncio.wait({asyncio.create_task(socket.send_json(message)) for socket in sockets})
+    await asyncio.gather(*(socket.send_json(message) for socket in sockets), return_exceptions=True)
 
 
 async def main_loop(wm: WebsiteManager, html_port: int) -> None:
