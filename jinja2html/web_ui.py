@@ -6,6 +6,7 @@ import logging
 
 from collections import defaultdict, Iterable
 from pathlib import Path
+from shutil import rmtree
 from typing import Any
 from urllib.parse import urlparse
 from webbrowser import open_new_tab
@@ -19,7 +20,7 @@ from uvicorn import Config, Server
 from watchfiles import awatch, Change
 
 from .build_context import Context
-from .website_manager import WebsiteManager
+from .website_manager import JinjaFilter, WebsiteManager
 from .utils import is_css_js
 
 log = logging.getLogger(__name__)
@@ -95,7 +96,6 @@ async def html_server(context: Context, port: int) -> None:
         context (Context): The website context to use
         port (int, optional): The port to bind the webserver to.
     """
-    open_new_tab(f"http://localhost:{port}")
     await CustomServer(Config(Starlette(debug=True, routes=[Mount("/", app=StaticFiles(directory=context.output_dir, html=True))]), port=port)).serve()
 
 
@@ -104,33 +104,64 @@ async def websocket_server() -> None:
     await CustomServer(Config(Starlette(debug=True, routes=[WebSocketRoute("/livereload", LiveReloadEndpoint)]), port=35729)).serve()
 
 
+async def open_tab(port: int) -> None:
+    """Opens a new browser tab to localhost on the specified port.  Includes a short delay to allow servers to start up.
+
+    Args:
+        port (int): The port to open the web browser to on localhost.
+    """
+    await asyncio.sleep(1)
+    open_new_tab(f"http://localhost:{port}")
+
+
 async def changed_files_handler(wm: WebsiteManager) -> None:
     """Detects and handles updates to watched html/js/css files.   Specifically, rebuild changed website files and notify websocket clients of changes.
 
     Args:
         wm (WebsiteManager):  The WebsiteManager to associate with this asyncio loop
     """
-    async for changes in awatch(wm.context.input_dir, watch_filter=wm.jinja_filter):
+    async for changes in awatch(wm.context.input_dir, watch_filter=JinjaFilter(wm.context)):
         l: set[Path] = set()
         build_all = notify_all = False
 
         for change, p in changes:
             p = Path(p)
-            if wm.context.is_template(p) or wm.context.is_config_json(p):
-                l = wm.find_acceptable_files()
-                build_all = True
-                break
-            elif change in (Change.added, Change.modified):
+            log.debug("change of type '%s' detected on '%s'", change.raw_str(), p)
+
+            # handle deleted content files/directories
+            if change == Change.deleted:
+                target = wm.context.output_dir / wm.context.stub_of(p)
+                if wm.context.is_content_file(p):
+                    target.unlink()
+                elif wm.context.is_content_dir(p):
+                    rmtree(target)
+                else: # rebuild all if user deleted template or config
+                    # l = wm.find_acceptable_files()
+                    build_all = True
+                    break
+            
+            # handle changed/added content files
+            elif wm.context.is_content_file(p):
                 l.add(p)
                 if is_css_js(p):
                     notify_all = True
+
+            # rebuild all if template/config changed or if it's a newly created content dir (watchfiles doesn't recursively report files in a new dir)
+            elif wm.context.is_template(p) or wm.context.is_config_json(p) or (wm.context.is_content_dir(p) and change == Change.added):
+                # l = wm.find_acceptable_files()
+                build_all = True
+                break
+
             else:
-                (wm.context.output_dir / wm.context.stub_of(p)).unlink(True)
+                log.warn("'%s' isn't a content file, template, config, or directory.  How did this make it past the filter?", p)
+
+        if build_all:
+            l = wm.find_acceptable_files()
 
         wm.build_files(l)
 
         if notify_all and not build_all:
-            l = wm.find_acceptable_files()
+            l = wm.find_acceptable_files()  # TODO: inefficient, should use _SESSIONS to get targets
 
         for p in l:
             stub = str(wm.context.stub_of(p))
@@ -162,6 +193,6 @@ async def main_loop(wm: WebsiteManager, html_port: int) -> None:
     """
     try:
         log.info("Setting up websocket server and process queue...")
-        await asyncio.gather(changed_files_handler(wm), html_server(wm.context, html_port), websocket_server(), return_exceptions=True)
+        await asyncio.gather(changed_files_handler(wm), html_server(wm.context, html_port), websocket_server(), open_tab(html_port), return_exceptions=True)
     except asyncio.CancelledError:
         log.debug("Received cancel request!")

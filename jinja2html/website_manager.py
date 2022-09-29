@@ -2,11 +2,11 @@
 
 import json
 import logging
-import shutil
 
 from collections import deque, Iterable
 from os import scandir
 from pathlib import Path
+from shutil import copy
 
 from bs4 import BeautifulSoup
 from watchfiles import Change, DefaultFilter
@@ -27,7 +27,6 @@ class WebsiteManager:
             context (Context): The `Context` to use.
         """
         self.context = context
-        self.jinja_filter = JinjaFilter(context)
 
     def find_acceptable_files(self) -> set[Path]:
         """Recursively searches the input directory, according to the input context, for files that should be processed.  Useful for cases when the whole website needs to be rebuilt.
@@ -40,15 +39,11 @@ class WebsiteManager:
 
         while l:
             with scandir(l.popleft()) as it:
-                for entry in it:
-                    entry_as_path = Path(entry)
-
-                    if entry.is_file():
-                        if self.context.should_watch_file(entry.path):
-                            files.add(entry_as_path)
-                    else:  # is_dir()
-                        if entry_as_path not in self.context.ignore_list and entry_as_path != self.context.template_dir and self.jinja_filter(Change.added, entry.path):
-                            l.append(entry.path)
+                for entry in map(Path, it):
+                    if self.context.is_content_file(entry):
+                        files.add(entry)
+                    elif self.context.is_content_dir(entry):
+                        l.append(entry)
 
         return files
 
@@ -70,9 +65,10 @@ class WebsiteManager:
             (output_path := self.context.output_dir / (stub := self.context.stub_of(f))).parent.mkdir(parents=True, exist_ok=True)  # create dir structure if it doesn't exist
 
             if is_css_js(f):
-                shutil.copy(f, output_path)
+                log.debug("copying '%s' into output", f)
+                copy(f, output_path)
             elif is_html(f):
-                log.debug("building html for %s", f)
+                log.debug("building html for '%s'", f)
 
                 try:
                     output = self.context.t_env.get_template(str(stub)).render(conf)
@@ -108,7 +104,6 @@ class JinjaFilter(DefaultFilter):
             context (Context): The `Context` to use.
         """
         self.context = context
-        super().__init__(ignore_paths=tuple(context.ignore_list))
 
     def __call__(self, change: Change, path: str) -> bool:
         """Gets called by `watchfiles` when it checks if changes to a path should be reported.
@@ -120,4 +115,4 @@ class JinjaFilter(DefaultFilter):
         Returns:
             bool: `True` if the change should be reported.
         """
-        return self.context.should_watch_file(path) and super().__call__(change, path)
+        return self.context.is_content_file(path) or self.context.is_content_dir(path) or self.context.is_config_json(path) or self.context.is_template(path)

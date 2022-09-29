@@ -5,8 +5,10 @@ import re
 
 from pathlib import Path
 from shutil import rmtree
+from typing import Union
 
 from jinja2 import Environment, FileSystemLoader
+from watchfiles import DefaultFilter
 
 from .utils import is_html
 
@@ -17,7 +19,7 @@ log = logging.getLogger(__name__)
 class Context:
     """Collects shared configuration and simple methods for determining which files/directories to watch.  There should only be one instance of this during the program's lifeycle."""
 
-    _FILE_PATTERN = re.compile(r"[^.].+\.(html|htm|css|js)", re.IGNORECASE)
+    _FILE_PATTERN = re.compile(r"[^.].*?\.(html|htm|css|js)$", re.IGNORECASE)
 
     def __init__(self, input_dir: Path = Path("."), output_dir: Path = Path("out"), template_dir: str = "templates", ignore_list: set[Path] = set(), dev_mode: bool = False) -> None:
         """Initializer, creates a new `Context`.  For best results, all `Path` type arguments should be absolute (this is automatically done in the initializer, but if you want to change the properties after initializing, make sure you do this).
@@ -34,8 +36,7 @@ class Context:
         self.template_dir: Path = self.input_dir / template_dir
         self.dev_mode: bool = dev_mode
 
-        self.ignore_list: set[Path] = {p.resolve() for p in ignore_list} if ignore_list else ignore_list
-        self.ignore_list.add(self.output_dir)
+        self.ignored_dirs: set[Path] = ({p.resolve() for p in ignore_list} if ignore_list else ignore_list) | {self.output_dir}
 
         self.config_json = (self.input_dir / "config.json").resolve()
         self.t_env = Environment(loader=FileSystemLoader(self.input_dir))
@@ -59,35 +60,61 @@ class Context:
         """
         return f.relative_to(self.input_dir)
 
-    def is_template(self, f: Path) -> bool:
+    def is_template(self, f: Union[Path, str]) -> bool:
         """Convienience method, determines whether a file is a template (i.e. in the `self.template_dir` directory)
 
         Args:
-            f (Path): The file to check.  Use an absolute `Path` for best results.
+            f (Union[Path, str]): The file to check.  Use an absolute `Path` for best results.
 
         Returns:
             bool: `True` if `f` is a template in the `self.template_dir` directory.
         """
-        return self.template_dir in f.parents and is_html(f)
+        return (f := _abs_path_of(f)).is_file() and self.template_dir in f.parents and is_html(f)
 
-    def is_config_json(self, f: Path) -> bool:
+    def is_config_json(self, f: Union[Path, str]) -> bool:
         """Convienience method, determines whether `f` is the `config.json` file.
 
         Args:
-            f (Path): The file to check.  Use an absolute `Path` for best results.
+            f (Union[Path, str]): The file to check.
 
         Returns:
             bool: `True` if `f` is the `config.json` file.
         """
-        return f == self.config_json
+        return _abs_path_of(f) == self.config_json
 
-    def should_watch_file(self, p: str) -> bool:
+    def is_content_file(self, p: Union[Path, str]) -> bool:
         """Determines whether a file should be watched.
 
         Args:
-            entry (str): The path to the file to check.  Must be a full path.
+            entry (Union[Path, str]): The path to the file to check.
 
         Returns:
             bool: `True` if the file should be watched.
         """
-        return Context._FILE_PATTERN.match(p) or self.is_config_json(Path(p))
+        return bool((p := Path(p)).is_file() and Context._FILE_PATTERN.match(p.name) and not self.is_template(p))
+
+    def is_content_dir(self, p: Union[Path, str]) -> bool:
+        """Determines if `p` is a directory containing jinja content.  Filters out template directories and ignored dirs.
+
+        Args:
+            p (Union[Path, str]): The path to check
+
+        Returns:
+            bool: `True` if `p` is a content directory.
+        """
+
+        return (p := _abs_path_of(p)).is_dir() and \
+            p != self.template_dir and self.template_dir not in p.parents and \
+            p.name not in DefaultFilter.ignore_dirs and p not in self.ignored_dirs
+
+
+def _abs_path_of(p: Union[Path, str]) -> Path:
+    """Convenience method, determines the absolute path of `p` and returns it as a `Path`
+
+    Args:
+        p (Union[Path, str]): The path to convert to an absolute path
+
+    Returns:
+        Path: The `p` resolved to an absolute path, as a `Path`
+    """
+    return Path(p).resolve()

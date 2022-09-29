@@ -23,19 +23,19 @@ def _main() -> None:
     cli_parser.add_argument("-o", type=Path, metavar="output_dir", default=Path("out"), help="The output directory to write website output files to.  Defaults to ./out")
     cli_parser.add_argument("-t", type=str, metavar="template_dir", default="templates", help="Shared templates directory (relative path only, this must be a subfolder of the input directory).  Defaults to templates")
     cli_parser.add_argument("--debug", action="store_true", help="Enables debug level logging")
-    cli_parser.add_argument("--blacklist", nargs="+", type=Path, metavar="ignored_dir", default=set(), help="directories to ignore")
+    cli_parser.add_argument("--ignore", nargs="+", type=Path, metavar="ignored_dir", default=set(), help="directories to ignore")
 
     args = cli_parser.parse_args()
-
-    (c := Context(args.i, args.o, args.t, args.blacklist, args.d)).clean()
-    (wm := WebsiteManager(c)).build_files(auto_find=True)
-
-    if not c.dev_mode:
-        return
 
     log = logging.getLogger("jinja2html")
     log.addHandler(RichHandler(rich_tracebacks=True))
     log.setLevel(logging.DEBUG if args.debug else logging.INFO)
+
+    (c := Context(args.i, args.o, args.t, args.ignore, args.d)).clean()
+    (wm := WebsiteManager(c)).build_files(auto_find=True)
+
+    if not c.dev_mode:
+        return
 
     log.info("Serving website on 'localhost:%d' and watching '%s' for html/js/css changes", args.p, c.input_dir)
 
