@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 class Context:
     """Collects shared configuration and simple methods for determining which files/directories to watch.  There should only be one instance of this during the program's lifeycle."""
 
-    _FILE_PATTERN = re.compile(r"[^.].*?\.(html|htm|css|js)$", re.IGNORECASE)
+    _FILE_PATTERN = re.compile(r"[^.].*?\.(html|css|js)$", re.IGNORECASE)
 
     def __init__(self, input_dir: Path = Path("."), output_dir: Path = Path("out"), template_dir: str = "templates", ignore_list: set[Path] = set(), dev_mode: bool = False) -> None:
         """Initializer, creates a new `Context`.  For best results, all `Path` type arguments should be absolute (this is automatically done in the initializer, but if you want to change the properties after initializing, make sure you do this).
@@ -102,7 +102,6 @@ class Context:
         Returns:
             bool: `True` if `p` is a content directory.
         """
-
         return (p := _abs_path_of(p)).is_dir() and \
             p != self.template_dir and self.template_dir not in p.parents and \
             p.name not in DefaultFilter.ignore_dirs and p not in self.ignored_dirs

@@ -3,17 +3,16 @@
 from pathlib import Path
 
 
-def _is_ext(f: Path, ext: tuple[str]) -> bool:
-    """Determines whether a file has one of the specified extension(s).
+def _normalized_ext(f: Path) -> str:
+    """Convenience method, gets the file extension of `f` in lowercase
 
     Args:
-        f (Path): The file to check.
-        ext (tuple[str]): The extension(s) to check for.  These should be lower case.
+        f (Path): The file to get the lowercased extension of.
 
     Returns:
-        bool: `True` if `f` has an extension in `ext`.
+        str: The lowercased extension of `f`, if possible
     """
-    return f.suffix.lower() in ext
+    return f.suffix.lower()
 
 
 def is_css_js(f: Path) -> bool:
@@ -25,7 +24,7 @@ def is_css_js(f: Path) -> bool:
     Returns:
         bool: `True` if `f` is a css/js file.
     """
-    return _is_ext(f, (".css", ".js"))
+    return _normalized_ext(f) in (".css", ".js")
 
 
 def is_html(f: Path) -> bool:
@@ -37,4 +36,4 @@ def is_html(f: Path) -> bool:
     Returns:
         bool: `True` if `f` is a jinja file.
     """
-    return _is_ext(f, (".html", ".htm", ".jinja"))
+    return _normalized_ext(f) == ".html"

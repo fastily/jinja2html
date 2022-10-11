@@ -135,11 +135,11 @@ async def changed_files_handler(wm: WebsiteManager) -> None:
                     target.unlink()
                 elif wm.context.is_content_dir(p):
                     rmtree(target)
-                else: # rebuild all if user deleted template or config
+                else:  # rebuild all if user deleted template or config
                     # l = wm.find_acceptable_files()
                     build_all = True
                     break
-            
+
             # handle changed/added content files
             elif wm.context.is_content_file(p):
                 l.add(p)
