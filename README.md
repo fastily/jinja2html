@@ -24,7 +24,7 @@ This installs the CLI command, `jinja2html`, which can be used to generate html 
 
 ## Usage
 ```
-usage: __main__.py [-h] [-d] [-p port] [-i input_dir] [-o output_dir] [-t template_dir] [--blacklist ignored_dir [ignored_dir ...]]
+usage: __main__.py [-h] [-d] [-p port] [-i input_dir] [-o output_dir] [-t template_dir] [--debug] [--ignore ignored_dir [ignored_dir ...]]
 
 Render jinja2 templates as html/css/js
 
@@ -35,7 +35,8 @@ optional arguments:
   -i input_dir          The input directory (contianing jinja templates) to use. Defaults to the current working directory.
   -o output_dir         The output directory to write website output files to. Defaults to ./out
   -t template_dir       Shared templates directory (relative path only, this must be a subfolder of the input directory). Defaults to templates
-  --blacklist ignored_dir [ignored_dir ...]
+  --debug               Enables debug level logging
+  --ignore ignored_dir [ignored_dir ...]
                         directories to ignore
 ```
 
@@ -48,11 +49,13 @@ jinja2html
 jinja2html -d
 
 # generate html files for use in prod and ignore folders Foo/ and Bar/
-jinja2html -d --blacklist Foo/ Bar/
+jinja2html -d --ignore Foo/ Bar/
 
 # run in dev mode, on port 8080 and ignore folder hello/world/
-jinja2html -d -p 8080 --blacklist hello/world/
+jinja2html -d -p 8080 --ignore hello/world/
 ```
+
+See [here](tests/resources/sample_project/) for an example project
 
 ## Scope
 jinja2html is designed for small and simple static websites.  If you're trying to do something big and complex, then you should stick with the tooling of a conventional front-end framework.

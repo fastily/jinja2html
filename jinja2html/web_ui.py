@@ -6,7 +6,6 @@ import logging
 
 from collections import defaultdict, Iterable
 from pathlib import Path
-from shutil import rmtree
 from typing import Any
 from urllib.parse import urlparse
 from webbrowser import open_new_tab
@@ -144,7 +143,6 @@ async def changed_files_handler(wm: WebsiteManager) -> None:
 
             # rebuild all if template/config changed or if it's a newly created content dir (watchfiles doesn't recursively report files in a new dir)
             elif wm.context.is_template(p) or wm.context.is_config_json(p) or (wm.context.is_content_dir(p) and change == Change.added):
-                # l = wm.find_acceptable_files()
                 build_all = True
                 break
 
