@@ -128,15 +128,11 @@ async def changed_files_handler(wm: WebsiteManager) -> None:
             p = Path(p)
             log.debug("change of type '%s' detected on '%s'", change.raw_str(), p)
 
-            # handle deleted content files/directories
+            # handle deleted
             if change == Change.deleted:
-                target = wm.context.output_dir / wm.context.stub_of(p)
-                if wm.context.is_content_file(p):
-                    target.unlink()
-                elif wm.context.is_content_dir(p):
-                    rmtree(target)
-                else:  # rebuild all if user deleted template or config
-                    # l = wm.find_acceptable_files()
+                # TODO: handle deleted subdirs of templates
+                # only acknowledge config/template deletion.  not doing content files/dirs bc this is a time sink and low roi for what is supposed to be a simple tool.
+                if wm.context.is_config_json(p) or wm.context.is_template(p, change):
                     build_all = True
                     break
 

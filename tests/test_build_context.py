@@ -1,13 +1,23 @@
+from unittest.mock import Mock, patch
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from jinja2html.build_context import Context
+from jinja2html.website_manager import WebsiteManager
 
 from .base import J2hTestCase
 
 
 class TestContext(J2hTestCase):
     """Test methods supporting the build context"""
+
+
+    @patch("jinja2html.build_context.rmtree")
+    def test_clean(self, mock:Mock):
+        with TemporaryDirectory() as tempdir:
+            WebsiteManager(c := Context(self.SAMPLE_PROJECT, expected_output_dir := Path(tempdir))).build_files(auto_find=True)
+            c.clean()
+            mock.assert_called_once_with(expected_output_dir.resolve(), ignore_errors=True)
 
     def test_is_stub_of(self):
         with TemporaryDirectory() as tempdir:

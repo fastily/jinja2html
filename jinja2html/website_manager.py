@@ -115,4 +115,4 @@ class JinjaFilter(DefaultFilter):
         Returns:
             bool: `True` if the change should be reported.
         """
-        return self.context.is_content_file(path) or self.context.is_content_dir(path) or self.context.is_config_json(path) or self.context.is_template(path)
+        return self.context.is_content_file(path) or self.context.is_content_dir(path) or self.context.is_config_json(path) or self.context.is_template(path, change)

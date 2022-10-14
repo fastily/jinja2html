@@ -8,7 +8,7 @@ from shutil import rmtree
 from typing import Union
 
 from jinja2 import Environment, FileSystemLoader
-from watchfiles import DefaultFilter
+from watchfiles import Change, DefaultFilter
 
 from .utils import is_html
 
@@ -60,16 +60,17 @@ class Context:
         """
         return f.relative_to(self.input_dir)
 
-    def is_template(self, f: Union[Path, str]) -> bool:
+    def is_template(self, f: Union[Path, str], change: Change = None) -> bool:
         """Convienience method, determines whether a file is a template (i.e. in the `self.template_dir` directory)
 
         Args:
             f (Union[Path, str]): The file to check.  Use an absolute `Path` for best results.
+            change (Change, optional): The type of `Change` to associate with this check.  Defaults to None.
 
         Returns:
             bool: `True` if `f` is a template in the `self.template_dir` directory.
         """
-        return (f := _abs_path_of(f)).is_file() and self.template_dir in f.parents and is_html(f)
+        return ((f := _abs_path_of(f)).is_file() or change == Change.deleted) and self.template_dir in f.parents and is_html(f)
 
     def is_config_json(self, f: Union[Path, str]) -> bool:
         """Convienience method, determines whether `f` is the `config.json` file.
@@ -86,12 +87,12 @@ class Context:
         """Determines whether a file should be watched.
 
         Args:
-            entry (Union[Path, str]): The path to the file to check.
+            p (Union[Path, str]): The path to the file to check.
 
         Returns:
             bool: `True` if the file should be watched.
         """
-        return bool((p := Path(p)).is_file() and Context._FILE_PATTERN.match(p.name) and not self.is_template(p))
+        return bool((p := Path(p)).is_file() and Context._FILE_PATTERN.match(p.name) and self.template_dir not in p.parents)
 
     def is_content_dir(self, p: Union[Path, str]) -> bool:
         """Determines if `p` is a directory containing jinja content.  Filters out template directories and ignored dirs.
