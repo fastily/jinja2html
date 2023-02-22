@@ -4,7 +4,8 @@ import asyncio
 import json
 import logging
 
-from collections import defaultdict, Iterable
+from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse

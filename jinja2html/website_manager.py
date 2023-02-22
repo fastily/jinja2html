@@ -3,7 +3,8 @@
 import json
 import logging
 
-from collections import deque, Iterable
+from collections import deque
+from collections.abc import Iterable
 from os import scandir
 from pathlib import Path
 from shutil import copy
