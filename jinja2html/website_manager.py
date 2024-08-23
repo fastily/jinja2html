@@ -84,7 +84,7 @@ class WebsiteManager:
                         body_tag.append(script_tag)
 
                         # add livereload script
-                        body_tag.append(soup.new_tag("script", src="https://cdnjs.cloudflare.com/ajax/libs/livereload-js/3.4.1/livereload.min.js", integrity="sha512-rclIrxzYHDmi28xeUES7WqX493chZ4LFEdbjMAUYiosJlKqham0ZujKU539fTFnZywE0c76XIRl9pLJ05OJPKA==", crossorigin="anonymous"))
+                        body_tag.append(soup.new_tag("script", src="https://cdnjs.cloudflare.com/ajax/libs/livereload-js/4.0.2/livereload.min.js", integrity="sha512-nQhKhtz+qMGBUxoxbEKKNhQbeXgbT/6+75vHBfmZj6VteO6oQNV7mM2opwzzJE828yLsJoL48Anej0JvMAzjwg==", crossorigin="anonymous"))
                         output = str(soup)
 
                     output_path.write_text(output)
