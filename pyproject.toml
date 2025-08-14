@@ -1,0 +1,33 @@
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
+[project]
+name = "jinja2html"
+version = "0.5.0"
+dependencies = ["beautifulsoup4", "Jinja2", "lxml", "rich", "starlette", "uvicorn[standard]"]
+requires-python = ">=3.11"
+authors = [{name = "Fastily", email = "fastily@users.noreply.github.com"}]
+description = "user-friendly generation of websites with jinja2 templates"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICEN[CS]E.*"]
+keywords = ["jinja"]
+classifiers = [
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent"
+]
+
+[project.urls]
+Homepage = "https://github.com/fastily/jinja2html"
+"Bug Tracker" = "https://github.com/fastily/jinja2html/issues"
+
+[project.scripts]
+jinja2html = "jinja2html.__main__:_main"
+
+[tool.uv.build-backend]
+module-name = "jinja2html"
+module-root = ""

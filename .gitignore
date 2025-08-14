@@ -15,9 +15,9 @@ __pycache__
 build
 dist
 *.egg-info
-
-scratch*
-venv_jinja2html
+.venv
 
 # generated files
 out
+
+scratch*

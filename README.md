@@ -17,7 +17,7 @@ No fancy bells and whistles, no bull$hit, just your bold artistic vision + jinja
 
 ## Install
 ```bash
-pip install jinja2html
+uv sync
 ```
 
 This installs the CLI command, `jinja2html`, which can be used to generate html or start the local development server.
@@ -43,16 +43,16 @@ optional arguments:
 #### Examples
 ```bash
 # generate html files for use in prod
-jinja2html
+uv run jinja2html
 
 # run in dev mode, in the current directory
-jinja2html -d
+uv run jinja2html -d
 
 # generate html files for use in prod and ignore folders Foo/ and Bar/
-jinja2html -d --ignore Foo/ Bar/
+uv run jinja2html -d --ignore Foo/ Bar/
 
 # run in dev mode, on port 8080 and ignore folder hello/world/
-jinja2html -d -p 8080 --ignore hello/world/
+uv run jinja2html -d -p 8080 --ignore hello/world/
 ```
 
 See [here](tests/resources/sample_project/) for an example project
