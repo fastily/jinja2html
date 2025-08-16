@@ -17,18 +17,22 @@ No fancy bells and whistles, no bull$hit, just your bold artistic vision + jinja
 
 ## Install
 ```bash
-uv sync
+# pip
+pip install jinja2html
+
+# uv
+uv tool install jinja2html
 ```
 
 This installs the CLI command, `jinja2html`, which can be used to generate html or start the local development server.
 
 ## Usage
 ```
-usage: __main__.py [-h] [-d] [-p port] [-i input_dir] [-o output_dir] [-t template_dir] [--debug] [--ignore ignored_dir [ignored_dir ...]]
+usage: jinja2html [-h] [-d] [-p port] [-i input_dir] [-o output_dir] [-t template_dir] [--debug] [--ignore ignored_dir [ignored_dir ...]]
 
 Render jinja2 templates as html/css/js
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -d                    enable development mode (live-reload)
   -p port               serve website on this port
@@ -43,16 +47,16 @@ optional arguments:
 #### Examples
 ```bash
 # generate html files for use in prod
-uv run jinja2html
+jinja2html
 
 # run in dev mode, in the current directory
-uv run jinja2html -d
+jinja2html -d
 
 # generate html files for use in prod and ignore folders Foo/ and Bar/
-uv run jinja2html -d --ignore Foo/ Bar/
+jinja2html -d --ignore Foo/ Bar/
 
 # run in dev mode, on port 8080 and ignore folder hello/world/
-uv run jinja2html -d -p 8080 --ignore hello/world/
+jinja2html -d -p 8080 --ignore hello/world/
 ```
 
 See [here](tests/resources/sample_project/) for an example project
